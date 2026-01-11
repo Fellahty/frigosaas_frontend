@@ -7,6 +7,11 @@ import html2canvas from 'html2canvas';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
+  // Validate that timestamp is a valid Date object
+  if (!timestamp || !(timestamp instanceof Date) || isNaN(timestamp.getTime())) {
+    return '-'; // Return dash for invalid dates
+  }
+  
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
   

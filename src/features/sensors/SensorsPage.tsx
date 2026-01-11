@@ -12,6 +12,11 @@ import { RoomDoc } from '../../types/settings';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
+  // Validate that timestamp is a valid Date object
+  if (!timestamp || !(timestamp instanceof Date) || isNaN(timestamp.getTime())) {
+    return '-'; // Return dash for invalid dates
+  }
+  
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - timestamp.getTime()) / 1000);
   
@@ -156,6 +161,18 @@ const SensorsPage: React.FC = () => {
 
     console.log(`✅ [SensorsPage] Found data for "${roomName}":`, roomData);
 
+    // Create a valid timestamp from epoch, or use current time as fallback
+    let timestamp: Date;
+    if (roomData.epoch && typeof roomData.epoch === 'number' && !isNaN(roomData.epoch)) {
+      timestamp = new Date(roomData.epoch * 1000);
+      // Validate the Date object
+      if (isNaN(timestamp.getTime())) {
+        timestamp = new Date(); // Fallback to current time if invalid
+      }
+    } else {
+      timestamp = new Date(); // Fallback to current time if epoch is missing/invalid
+    }
+
     // Convert the API response to the expected format
     const sensorData = {
       temperature: parseFloat(roomData.temperature),
@@ -163,7 +180,7 @@ const SensorsPage: React.FC = () => {
       battery: 0, // Not provided by the new API
       magnet: roomData.magnet === true ? 1 : 0,
       beacons: null,
-      timestamp: new Date(roomData.epoch * 1000), // Convert epoch to Date
+      timestamp: timestamp,
       localTime: roomData.local_time // Keep the formatted time from API
     };
 
