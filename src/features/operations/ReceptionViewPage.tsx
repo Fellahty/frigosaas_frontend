@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Card } from '../../components/Card';

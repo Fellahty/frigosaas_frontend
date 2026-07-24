@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOfflineQuery, useOfflineMutation } from '../lib/hooks/useOfflineSync';
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from '@/lib/db';
 import { db } from '../lib/firebase';
 import { useTenantId } from '../lib/hooks/useTenantId';
 

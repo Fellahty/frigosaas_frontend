@@ -1,6 +1,6 @@
 import React from 'react';
 import { useOfflineQuery } from '../../lib/hooks/useOfflineSync';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';

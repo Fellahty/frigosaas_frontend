@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';

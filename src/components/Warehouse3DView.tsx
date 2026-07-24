@@ -102,11 +102,10 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
   const temp = sensor?.additionalData?.temperature;
   const humidity = sensor?.additionalData?.humidity;
 
-  // Larger chamber dimensions - Better presence
-  const baseScale = 1.6 + (room.capacity / 10000) * 0.5;
-  const width = 3.5 * baseScale; // Wider
-  const height = 4; // Taller ceiling
-  const depth = 4.5 * baseScale; // Deeper
+  // Larger chamber dimensions - fixed size so layout spacing stays consistent
+  const width = 5.2;
+  const height = 4;
+  const depth = 5.8;
 
   return (
     <group position={position}>
@@ -555,38 +554,73 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate positions - Spacious warehouse layout
+  // Positions driven by chamber number + FRIGO group (not fragile array index)
   const roomPositions = useMemo(() => {
     const positions: Map<string, [number, number, number]> = new Map();
-    
-    // Spacious warehouse layout with better spacing
-    const avgScale = 1.6 + (6000 / 10000) * 0.5;
-    const roomWidth = 3.5 * avgScale;
-    const roomDepth = 4.5 * avgScale;
-    const aisleWidth = 6; // Wider central corridor
-    const roomSpacing = roomDepth + 1.5; // More space between rooms
-    
-    // Split rooms: first half on left (1-6), second half on right (7+)
-    const halfCount = Math.ceil(rooms.length / 2);
-    
-    rooms.forEach((room, index) => {
-      // First half of rooms go to left side (1-6), second half to right side (7+)
-      const isLeftSide = index < halfCount;
-      
-      // Position along the corridor (starting from door at front)
-      const roomIndexOnSide = isLeftSide ? index : (index - halfCount);
-      // Start from front (negative z) and go back: Chambre 1 at front
-      const z = (roomIndexOnSide * roomSpacing) - (halfCount * roomSpacing / 2) + (roomSpacing / 2);
-      
-      // Position across the corridor
-      const x = isLeftSide 
-        ? -(aisleWidth / 2 + roomWidth / 2)  // Left side
-        : (aisleWidth / 2 + roomWidth / 2);   // Right side
-      
-      const y = 4 / 2; // Half height (center of room - updated for new height)
-      
-      positions.set(room.id, [x, y, z]);
-    });
+
+    const getChamberNumber = (name: string): number => {
+      const m = name.match(/(?:chambre|ch|couloir)\s*(\d+)/i) || name.match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+
+    const roomWidth = 5.2;
+    const roomDepth = 5.8;
+    const aisleWidth = 8;
+    const roomSpacing = roomDepth + 2.2; // clear gap so boxes never stack
+
+    // Detect how groups are represented in the current view
+    const groups = new Map<number, typeof rooms>();
+    for (const room of rooms) {
+      const chNum = getChamberNumber(room.name);
+      const group =
+        room.athGroupNumber ||
+        (chNum > 0 && chNum <= 6 ? 1 : chNum > 6 ? 2 : 1);
+      const list = groups.get(group) ?? [];
+      list.push(room);
+      groups.set(group, list);
+    }
+
+    const groupIds = [...groups.keys()].sort((a, b) => a - b);
+    const multiGroup = groupIds.length > 1;
+
+    for (const groupId of groupIds) {
+      const groupRooms = (groups.get(groupId) ?? []).slice().sort((a, b) => {
+        return getChamberNumber(a.name) - getChamberNumber(b.name);
+      });
+
+      // Multi-FRIGO (tab "Toutes"): whole FRIGO on one side of the corridor
+      // Single FRIGO tab: alternate left/right facing the aisle
+      groupRooms.forEach((room, index) => {
+        let isLeftSide: boolean;
+        let rowIndex: number;
+
+        if (multiGroup) {
+          isLeftSide = groupId === groupIds[0];
+          rowIndex = index;
+        } else {
+          isLeftSide = index % 2 === 0;
+          rowIndex = Math.floor(index / 2);
+        }
+
+        const countOnSide = multiGroup
+          ? groupRooms.length
+          : Math.ceil(groupRooms.length / 2);
+        const z =
+          rowIndex * roomSpacing -
+          ((countOnSide - 1) * roomSpacing) / 2;
+
+        const x = isLeftSide
+          ? -(aisleWidth / 2 + roomWidth / 2)
+          : aisleWidth / 2 + roomWidth / 2;
+        const y = 2;
+
+        const key = room.id || room.name;
+        positions.set(key, [x, y, z]);
+        if (room.id && room.name) {
+          positions.set(room.name, [x, y, z]);
+        }
+      });
+    }
 
     return positions;
   }, [rooms]);
@@ -640,11 +674,16 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
 
         {/* IoT Network Connections - Data flow visualization */}
         {rooms.slice(0, -1).map((room, index) => {
-          const pos1 = roomPositions.get(room.id) || [0, 0, 0];
+          const pos1 =
+            roomPositions.get(room.id) ||
+            roomPositions.get(room.name) ||
+            [0, 2, 0];
           const nextRoom = rooms[index + 1];
-          const pos2 = roomPositions.get(nextRoom?.id || '') || [0, 0, 0];
-          
           if (!nextRoom) return null;
+          const pos2 =
+            roomPositions.get(nextRoom.id) ||
+            roomPositions.get(nextRoom.name) ||
+            [0, 2, 0];
           
           const distance = Math.sqrt(
             Math.pow(pos2[0] - pos1[0], 2) + 
@@ -897,10 +936,13 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
 
         {/* Room boxes */}
         {rooms.map((room) => {
-          const position = roomPositions.get(room.id) || [0, 0, 0];
+          const position =
+            roomPositions.get(room.id) ||
+            roomPositions.get(room.name) ||
+            [0, 2, 0];
           return (
             <RoomBox
-              key={room.id}
+              key={room.id || room.name}
               room={room}
               position={position}
               isSelected={internalSelectedRoom?.id === room.id}

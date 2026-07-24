@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from './db';
 
 /**
  * Safely converts supported time representations to a JavaScript Date.

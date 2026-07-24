@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FormCard } from '../../../components/FormCard';
 import { pricingSettingsSchema, type PricingSettings } from '../../../types/settings';
 import { useTenantId } from '../../../lib/hooks/useTenantId';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from '@/lib/db';
 import { db } from '../../../lib/firebase';
 import { toast } from 'react-hot-toast';
 

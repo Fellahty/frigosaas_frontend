@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc } from '@/lib/db';
 import { db } from '../firebase';
 import { useTenantId } from './useTenantId';
 import { safeToDate } from '../dateUtils';
@@ -334,7 +334,7 @@ export const useDepositPerCrate = () => {
       }
 
       try {
-        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
+        const pricingRef = doc(db, 'tenants', tenantId, 'settings', 'pricing');
         const pricingSnap = await getDoc(pricingRef);
         
         if (pricingSnap.exists()) {

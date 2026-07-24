@@ -4,6 +4,11 @@ import jsPDF from 'jspdf';
 import * as SunCalc from 'suncalc';
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
+import { useTenantId } from '../lib/hooks/useTenantId';
+import {
+  getDemoColdStorageHistory,
+  isDemoTenant,
+} from '../lib/demoColdStorageSensors';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -69,6 +74,7 @@ interface SensorChartProps {
 }
 
 const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomName, displayRoomName, boitieDeviceId, isOpen, onClose, availableChambers = [] }) => {
+  const tenantId = useTenantId();
   const [data, setData] = useState<SensorData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -291,9 +297,9 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         return cached.data;
       }
       
-      // Fetch from API
+      // Fetch from API (or DEMO cold-storage simulation)
       const deviceId = chamber.boitieDeviceId || boitieDeviceId;
-      if (!deviceId) {
+      if (!deviceId && !isDemoTenant(tenantId)) {
         console.error(`❌ [SensorChart] No device ID for chamber ${chamber.name}`);
         return [];
       }
@@ -324,6 +330,25 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
         start.setHours(0, 0, 0, 0);
         end = new Date(dateRange.end);
         end.setHours(23, 59, 59, 999);
+      }
+
+      if (isDemoTenant(tenantId)) {
+        const step =
+          dateRange.type === '30min' || dateRange.type === '1h'
+            ? 2
+            : dateRange.type === '6h' || dateRange.type === '12h'
+              ? 10
+              : 30;
+        const demoPoints = getDemoColdStorageHistory(chamber.name, start, end, step);
+        const processedData: SensorData[] = demoPoints.map((item) => ({
+          timestamp: item.epoch * 1000,
+          temperature: item.temperature,
+          humidity: item.humidity,
+          battery: 0,
+          magnet: item.magnet ? 1 : 0,
+        }));
+        cache.set(cacheKey, { data: processedData, timestamp: now });
+        return processedData;
       }
       
       // Format dates for API
@@ -381,7 +406,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
       console.error(`❌ [SensorChart] Error fetching data for ${chamber.name}:`, error);
       return [];
     }
-  }, [data, sensorName, sensorId, dateRange, cache, CACHE_DURATION, boitieDeviceId]);
+  }, [data, sensorName, sensorId, dateRange, cache, CACHE_DURATION, boitieDeviceId, tenantId]);
   
   // Function to toggle chamber selection
   const toggleChamberSelection = useCallback(async (chamber: { id: string; name: string; channelNumber: number; boitieDeviceId?: string; athGroupNumber?: number }) => {
@@ -987,6 +1012,27 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
           // Default to 30 minutes
           start = new Date(end.getTime() - 30 * 60 * 1000);
       }
+
+      if (isDemoTenant(tenantId)) {
+        const step =
+          dateRange.type === '30min' || dateRange.type === '1h'
+            ? 2
+            : dateRange.type === '6h' || dateRange.type === '12h'
+              ? 10
+              : 30;
+        const demoPoints = getDemoColdStorageHistory(room, start, end, step);
+        const processedData: SensorData[] = demoPoints.map((item) => ({
+          timestamp: item.epoch * 1000,
+          temperature: item.temperature,
+          humidity: item.humidity,
+          battery: 0,
+          magnet: item.magnet ? 1 : 0,
+        }));
+        cache.set(cacheKey, { data: processedData, timestamp: now });
+        setData(processedData);
+        setLoading(false);
+        return;
+      }
       
       // Format dates for API (YYYY-MM-DD HH:MM)
       const formatDate = (date: Date) => {
@@ -1068,7 +1114,7 @@ const SensorChart: React.FC<SensorChartProps> = ({ sensorId, sensorName, roomNam
     } finally {
       setLoading(false);
     }
-  }, [sensorId, dateRange, boitieDeviceId, channelNumber, cache, processChamberData]);
+  }, [sensorId, sensorName, roomName, dateRange, boitieDeviceId, channelNumber, cache, processChamberData, tenantId]);
 
   // Quick date range functions
   const setQuickRange = (days: number, type: string) => {

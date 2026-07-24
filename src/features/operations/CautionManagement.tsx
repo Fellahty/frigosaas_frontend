@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, addDoc, doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, getDoc, deleteDoc, updateDoc } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';
@@ -91,7 +91,7 @@ const CautionManagement: React.FC<CautionManagementProps> = ({ onClose }) => {
     queryFn: async () => {
       if (!tenantId) return 50;
       try {
-        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
+        const pricingRef = doc(db, 'tenants', tenantId, 'settings', 'pricing');
         const pricingDoc = await getDoc(pricingRef);
         if (pricingDoc.exists()) {
           const data = pricingDoc.data();

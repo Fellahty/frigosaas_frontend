@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from '@/lib/db';
 import { db } from './firebase';
 import { useTenantId } from './hooks/useTenantId';
 import { useCurrentUser } from './hooks/useCurrentUser';
@@ -25,7 +25,10 @@ export const logAction = async (
   userName: string = 'Système'
 ) => {
   try {
-    const tenantId = 'YAZAMI'; // For now, hardcoded. In a real app, this would come from context
+    const tenantId =
+      localStorage.getItem('tenantId') ||
+      localStorage.getItem('tenantSlug')?.toUpperCase() ||
+      'unknown';
     
     const logEntry: Omit<LogEntry, 'timestamp'> = {
       userId,

@@ -1,10 +1,11 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { MetricsToday, Kpis, RoomSummary, AlertItem, TopClient, MoveItem } from '../../types/metrics';
+import { deduplicateFacilityRooms } from '../../lib/facilityGroups';
 import { KpiCards } from './KpiCards';
 import FacilityMap from './FacilityMap';
 import { Spinner } from '../../components/Spinner';
@@ -66,11 +67,14 @@ export const DashboardPage: React.FC = () => {
           ...doc.data()
         }));
 
-        // Process rooms data
-        const rooms = roomsResult.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        // Process rooms data (drop legacy CHN duplicates when Chambre N exists)
+        const rooms = deduplicateFacilityRooms(
+          roomsResult.docs.map(doc => ({
+            id: doc.id,
+            name: (doc.data().room as string) || doc.id,
+            ...doc.data(),
+          }))
+        );
 
         // Process receptions data and sort by creation date
         const receptions = receptionsResult.docs
@@ -118,10 +122,11 @@ export const DashboardPage: React.FC = () => {
           // Calculate current occupancy based on receptions
           const roomReceptions = receptions.filter(r => r.roomId === room.id);
           const currentOccupancy = roomReceptions.reduce((sum, r) => sum + (r.totalCrates || 0), 0);
-          
+          const roomName = room.room || room.name || `Room ${room.id}`;
+
           return {
             id: room.id,
-            name: room.room || `Room ${room.id}`,
+            name: roomName,
             capacity: room.capacityCrates || room.capacity || 0,
             currentOccupancy: Math.min(currentOccupancy, room.capacityCrates || room.capacity || 0),
             temperature: room.temperature || 22 + Math.random() * 4, // Simulate sensor data

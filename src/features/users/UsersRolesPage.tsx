@@ -1,9 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp } from 'firebase/firestore';
-import { updatePassword, deleteUser } from 'firebase/auth';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, Timestamp, db } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
-import { db, auth } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { logCreate, logDelete, logUpdate } from '../../lib/logging';
 import { Card } from '../../components/Card';

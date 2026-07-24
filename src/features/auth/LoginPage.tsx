@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslation } from 'react-i18next';
-import { authenticateUser } from '../../lib/auth';
+import { authenticateUser, logout as logoutTenant, ApiError } from '../../lib/auth';
+import { loginPlatformAdmin, clearPlatformAuth } from '../../lib/platformAuth';
+import { useTenant } from '../../app/TenantProvider';
+import { persistTenantSession } from '../../lib/tenantResolver';
 import { LangSwitcher } from '../../components/LangSwitcher';
+
+function isFrigoSmartAdminEmail(email: string): boolean {
+  return email.toLowerCase().includes('@frigosmart.com');
+}
 
 type LoginFormData = {
   loginField: string;
@@ -14,6 +21,8 @@ type LoginFormData = {
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation();
+  const { legacyId, name, slug, loading: brandingLoading, error: brandingError, setFromLogin } = useTenant();
+  const tenantId = legacyId;
   
   const loginSchema = z.object({
     loginField: z.string().min(1, t('auth.emailOrPhoneRequired') as string),
@@ -35,14 +44,34 @@ export const LoginPage: React.FC = () => {
 
 
   const onSubmit = async (data: LoginFormData) => {
-    console.log('🚀 Form submitted with data:', { ...data, userType });
     setError('');
     try {
-      const user = await authenticateUser(data.loginField, data.password, 'YAZAMI', userType);
-      
+      // Compte FrigoSmart admin → panel /admin (pas le login frigo client)
+      if (loginType === 'email' && isFrigoSmartAdminEmail(data.loginField)) {
+        try {
+          clearPlatformAuth();
+          logoutTenant();
+          await loginPlatformAdmin(data.loginField.trim(), data.password);
+          navigate('/admin');
+          return;
+        } catch {
+          setError('Compte FrigoSmart invalide. Vérifiez email et mot de passe.');
+          return;
+        }
+      }
+
+      if (!tenantId) {
+        setError(brandingError || 'Client frigo introuvable. Vérifiez l\'URL de connexion.');
+        return;
+      }
+
+      const user = await authenticateUser(data.loginField, data.password, tenantId, userType);
+
       if (user) {
-        console.log('✅ User authenticated successfully:', user);
-        // Store user in localStorage for session management
+        clearPlatformAuth();
+        if (slug && name) setFromLogin(slug, user.tenantId, name);
+        else persistTenantSession(slug || user.tenantId.toLowerCase(), user.tenantId, name || undefined);
+        localStorage.setItem('tenantId', user.tenantId);
         localStorage.setItem('user', JSON.stringify({
           id: user.id,
           name: user.name,
@@ -51,16 +80,36 @@ export const LoginPage: React.FC = () => {
           email: user.email,
           role: user.role,
           tenantId: user.tenantId,
-          userType: userType
+          userType: userType,
         }));
         navigate('/dashboard');
+        return;
+      }
+
+      // Secours : essai login admin plateforme si email
+      if (loginType === 'email' && data.loginField.includes('@')) {
+        try {
+          clearPlatformAuth();
+          logoutTenant();
+          await loginPlatformAdmin(data.loginField.trim(), data.password);
+          navigate('/admin');
+          return;
+        } catch {
+          // ignore, show tenant error below
+        }
+      }
+
+      setError(
+        loginType === 'email' && isFrigoSmartAdminEmail(data.loginField)
+          ? 'Compte FrigoSmart invalide. Utilisez le panel admin ou vérifiez le mot de passe.'
+          : (t('auth.invalidCredentials', 'Identifiants invalides') as string)
+      );
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setError(e.message);
       } else {
-        console.log('❌ Authentication failed');
         setError(t('auth.invalidCredentials', 'Identifiants invalides') as string);
       }
-    } catch (error) {
-      console.error('💥 Authentication error:', error);
-      setError(t('auth.invalidCredentials', 'Identifiants invalides') as string);
     }
   };
 
@@ -79,10 +128,17 @@ export const LoginPage: React.FC = () => {
         
         {/* Logo Section */}
         <div className="text-center mb-10 sm:mb-12">
-          {/* Clean Apple-style title */}
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-light text-gray-900 tracking-tight leading-tight mb-4">
-            Domaine <span className="font-bold">LYAZAMI</span>
+            {brandingLoading ? (
+              <span className="inline-block h-10 w-48 bg-gray-200 rounded animate-pulse" />
+            ) : (
+              <span className="font-bold">{name || slug?.toUpperCase()}</span>
+            )}
           </h1>
+
+          {brandingError && (
+            <p className="text-amber-600 text-sm mb-2">{brandingError}</p>
+          )}
           
           {/* Minimalist welcome message */}
           <p className="text-gray-500 text-base sm:text-lg font-light max-w-md mx-auto leading-relaxed">
@@ -266,8 +322,7 @@ export const LoginPage: React.FC = () => {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isSubmitting}
-              onClick={() => console.log('🔘 Button clicked!')}
+              disabled={isSubmitting || brandingLoading}
               className="w-full flex justify-center items-center py-3 sm:py-4 px-6 border border-transparent rounded-2xl shadow-lg text-sm font-semibold text-white bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] hover:shadow-xl"
             >
               {isSubmitting ? (
@@ -289,10 +344,16 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8">
+        <div className="text-center mt-8 space-y-2">
           <p className="text-xs text-gray-500 font-light">
             {t('auth.copyright')}
           </p>
+          <Link
+            to="/admin/login"
+            className="inline-block text-xs text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            Administration FrigoSmart →
+          </Link>
         </div>
       </div>
     </div>

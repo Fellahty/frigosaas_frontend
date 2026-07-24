@@ -3,40 +3,91 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --fs-ink: #0f172a;
+    --fs-muted: #64748b;
+    --fs-surface: #ffffff;
+    --fs-canvas: #f1f5f9;
+    --fs-accent: #0e7490;
+    --fs-accent-soft: #ecfeff;
+    --fs-border: #e2e8f0;
+  }
+
   html {
-    font-family: system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+  }
+
+  body {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--fs-ink);
+    background-color: var(--fs-canvas);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: #a5f3fc;
+    color: #164e63;
+  }
+}
+
+@layer components {
+  /* FrigoSmart admin shell */
+  .admin-shell {
+    background:
+      radial-gradient(ellipse 80% 50% at 100% -20%, rgba(14, 116, 144, 0.07), transparent),
+      radial-gradient(ellipse 60% 40% at 0% 100%, rgba(8, 145, 178, 0.05), transparent),
+      #f1f5f9;
+  }
+
+  .admin-page-shell {
+    animation: admin-fade-in 0.35s ease-out;
+  }
+
+  @keyframes admin-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .admin-card-elevated {
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)];
   }
 }
 
 @layer utilities {
-  /* Smooth scrolling for comparison mode */
   .scrollbar-thin {
     scrollbar-width: thin;
   }
-  
+
   .scrollbar-thumb-blue-200 {
     scrollbar-color: rgb(191, 219, 254) transparent;
   }
-  
-  /* Hide scrollbar for Chrome, Safari and Opera */
+
   .scrollbar-track-transparent::-webkit-scrollbar {
     height: 4px;
   }
-  
+
   .scrollbar-track-transparent::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   .scrollbar-track-transparent::-webkit-scrollbar-thumb {
     background: rgb(191, 219, 254);
     border-radius: 10px;
   }
-  
+
   .scrollbar-track-transparent::-webkit-scrollbar-thumb:hover {
     background: rgb(147, 197, 253);
   }
-  
-  /* Smooth momentum scrolling on iOS */
+
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
   }

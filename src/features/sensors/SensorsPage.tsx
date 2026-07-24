@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';
@@ -9,6 +9,10 @@ import { SensorHistoryModal } from './SensorHistoryModal';
 import SensorChart from '../../components/SensorChart';
 import Warehouse3DView from '../../components/Warehouse3DView';
 import { RoomDoc } from '../../types/settings';
+import {
+  getDemoColdStorageReading,
+  isDemoTenant,
+} from '../../lib/demoColdStorageSensors';
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -224,16 +228,17 @@ const SensorsPage: React.FC = () => {
         .filter(room => room.active === true && room.capteurInstalled === true)
         .sort((a, b) => a.room.localeCompare(b.room, 'fr', { numeric: true }));
       
-      // Fetch all room data from the new API (single call for all rooms - NO CACHE)
-      console.log(`📡 [SensorsPage] Fetching fresh data for all rooms from API`);
-      const bulkData = await fetchAllTelemetryData();
+      // DEMO: realistic apple cold-storage norms (not ambient ~21°C from shared API)
+      const useDemoSensors = isDemoTenant(tenantId);
+      const bulkData = useDemoSensors ? null : await fetchAllTelemetryData();
       
-      // Process each room using the bulk data
       for (const roomDoc of filteredRooms) {
-        // Extract sensor data from the API response using exact room name
-        const sensorData = bulkData ? extractSensorDataFromBulk(roomDoc.room, bulkData) : null;
+        const sensorData = useDemoSensors
+          ? getDemoColdStorageReading(roomDoc.room)
+          : bulkData
+            ? extractSensorDataFromBulk(roomDoc.room, bulkData)
+            : null;
         
-        // Use real sensor data from API, with fallback for testing
         const rawSensorData = sensorData || {
           temperature: 0,
           humidity: 0,
@@ -244,7 +249,6 @@ const SensorsPage: React.FC = () => {
           localTime: new Date().toLocaleString('fr-FR')
         };
 
-        // Use raw sensor data as-is (we'll process it after the query)
         const finalSensorData = rawSensorData;
         
         console.log('Final sensor data for room:', roomDoc.room, finalSensorData);
@@ -439,14 +443,13 @@ const SensorsPage: React.FC = () => {
       return [];
     }
     if (activeTab === 'all') {
-      roomsToDisplay = rooms || [];
+      roomsToDisplay = processedRooms || [];
     } else {
       roomsToDisplay = groupedRooms[activeTab] || [];
     }
     
     // Sort rooms numerically by name (Chambre 1, Chambre 2, CH1, CH2, etc.) for correct 3D positioning
-    return roomsToDisplay.sort((a, b) => {
-      // Extract numbers from room names (handles "Chambre 1", "CH1", "Couloir 1", etc.)
+    return [...roomsToDisplay].sort((a, b) => {
       const extractNumber = (name: string): number => {
         const match = name.match(/(\d+)/);
         return match ? parseInt(match[0]) : 0;
@@ -455,14 +458,13 @@ const SensorsPage: React.FC = () => {
       const aNum = extractNumber(a.name);
       const bNum = extractNumber(b.name);
       
-      // If numbers are the same, fall back to alphabetical sorting
       if (aNum === bNum) {
         return a.name.localeCompare(b.name, 'fr', { numeric: true });
       }
       
       return aNum - bNum;
     });
-  }, [activeTab, rooms, groupedRooms]);
+  }, [activeTab, processedRooms, groupedRooms]);
 
   const handleSensorClick = (sensor: Sensor) => {
     console.log('🔍 [SensorsPage] Sensor clicked:', sensor);

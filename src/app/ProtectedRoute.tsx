@@ -1,29 +1,27 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../lib/hooks/useAuth';
+import { getToken } from '../lib/api/client';
 
 export const ProtectedRoute: React.FC = () => {
   const { user, loading } = useAuth();
-
-  console.log('ProtectedRoute: loading:', loading, 'user:', user);
+  const hasToken = !!getToken();
 
   if (loading) {
-    console.log('ProtectedRoute: Showing loading screen');
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 border-t-indigo-600 mx-auto mb-4" />
+          <p className="text-sm text-slate-500">Vérification de la session...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    console.log('ProtectedRoute: No user, redirecting to login');
-    return <Navigate to="/login" replace />;
+  if (!user || !hasToken) {
+    const slug = localStorage.getItem('tenantSlug');
+    return <Navigate to={slug ? `/login/${slug}` : '/login'} replace />;
   }
 
-  console.log('ProtectedRoute: User authenticated, rendering outlet');
   return <Outlet />;
 };

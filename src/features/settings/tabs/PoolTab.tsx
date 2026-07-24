@@ -1,6 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, getDocs, addDoc, updateDoc, doc, query, where, Timestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, query, where, Timestamp, getDoc } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
 import { Card } from '../../../components/Card';
 import { Spinner } from '../../../components/Spinner';

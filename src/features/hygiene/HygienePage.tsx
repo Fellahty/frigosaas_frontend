@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from '@/lib/db';
+import { ref, uploadBytes, getDownloadURL } from '@/lib/storage';
 import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Room } from '../../types/settings';

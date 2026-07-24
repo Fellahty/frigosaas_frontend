@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, addDoc, Timestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, updateDoc, doc, deleteDoc } from '@/lib/db';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../lib/firebase';

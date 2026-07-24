@@ -10,11 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "test": "vitest",
-    "emulators:start": "firebase emulators:start --only auth,firestore",
-    "emulators:start:all": "firebase emulators:start",
-    "deploy": "npm run build && firebase deploy --only hosting",
-    "deploy:all": "npm run build && firebase deploy"
+    "test": "vitest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -31,7 +27,6 @@
     "@vercel/analytics": "^1.5.0",
     "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.2",
-    "firebase": "^9.17.0",
     "generate-password": "^1.7.1",
     "html2canvas": "^1.4.1",
     "i18next": "^22.4.10",

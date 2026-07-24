@@ -9,9 +9,14 @@ import {
   Timestamp,
   getDoc,
   doc,
-} from "firebase/firestore";
+} from "@/lib/db";
 import { db } from "../../lib/firebase";
 import { useTenantId } from "../../lib/hooks/useTenantId";
+import { useTenantOptional } from "../../app/TenantProvider";
+import {
+  assignRoomsToFacilityGroups,
+  resolveFacilityGroups,
+} from "../../lib/facilityGroups";
 import { RoomSummary } from "../../types/metrics";
 import { safeToDate } from "../../lib/dateUtils";
 
@@ -278,15 +283,22 @@ const RoomCard: React.FC<{
   );
 };
 
+const GROUP_STYLES = [
+  { gradient: "from-blue-50 via-blue-50 to-indigo-50", accent: "text-blue-600", activeBg: "bg-blue-50", activeText: "text-blue-600", dot: "bg-blue-500", btn: "bg-blue-600" },
+  { gradient: "from-green-50 via-green-50 to-emerald-50", accent: "text-green-600", activeBg: "bg-green-50", activeText: "text-green-600", dot: "bg-green-500", btn: "bg-green-600" },
+  { gradient: "from-violet-50 via-violet-50 to-purple-50", accent: "text-violet-600", activeBg: "bg-violet-50", activeText: "text-violet-600", dot: "bg-violet-500", btn: "bg-violet-600" },
+];
+
 const FacilityMap: React.FC<FacilityMapProps> = ({
   rooms = [],
   clients = [],
 }) => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
-  const [group1, setGroup1] = useState<RoomSummary[]>([]);
-  const [group2, setGroup2] = useState<RoomSummary[]>([]);
-  const [activeTab, setActiveTab] = useState<"group1" | "group2">("group1");
+  const tenant = useTenantOptional();
+  const facilityGroups = resolveFacilityGroups(tenant?.facilityGroups);
+  const [groupedRooms, setGroupedRooms] = useState<Record<string, RoomSummary[]>>({});
+  const [activeTab, setActiveTab] = useState<string>(facilityGroups[0]?.id ?? "group1");
   const [isMobile, setIsMobile] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -387,70 +399,25 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
 
   useEffect(() => {
     if (!rooms?.length) {
-      setGroup1([]);
-      setGroup2([]);
+      setGroupedRooms({});
       return;
     }
-  
-    const getCHNumber = (name: string) => {
-      const m = name.trim().match(/^(CH|chambre)\s*(\d+)/i);
-      return m ? parseInt(m[2], 10) : null;
-    };
-  
-    const getCouloirNumber = (name: string) => {
-      const m = name.trim().match(/^Couloir\s*(\d+)/i);
-      return m ? parseInt(m[1], 10) : null;
-    };
-  
-    // Optional: stable sort -> CH by number, then Couloir by number, then name.
-    const sortedRooms = [...rooms].sort((a, b) => {
-      const aCH = getCHNumber(a.name);
-      const bCH = getCHNumber(b.name);
-      const aCou = getCouloirNumber(a.name);
-      const bCou = getCouloirNumber(b.name);
-  
-      // CH first by number
-      if (aCH !== null || bCH !== null) {
-        if (aCH === null) return 1;
-        if (bCH === null) return -1;
-        return aCH - bCH;
-      }
-      // then Couloir by number
-      if (aCou !== null || bCou !== null) {
-        if (aCou === null) return 1;
-        if (bCou === null) return -1;
-        return aCou - bCou;
-      }
-      // fallback: alphabetical
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    });
-  
-    const group1Rooms = sortedRooms.filter((room) => {
-      const chNum = getCHNumber(room.name);
-      const couNum = getCouloirNumber(room.name);
-  
-      // Explicit Couloir rules first
-      if (couNum === 1) return true;
-      if (couNum === 2) return false;
-  
-      // CH rule: 1–6 in Group 1 (change to 1–5 if that’s your real range)
-      return chNum !== null && chNum >= 1 && chNum <= 6;
-    });
-  
-    const group2Rooms = sortedRooms.filter((room) => {
-      const chNum = getCHNumber(room.name);
-      const couNum = getCouloirNumber(room.name);
-  
-      if (couNum === 2) return true;
-      if (couNum === 1) return false;
-  
-      // CH rule: >6 in Group 2
-      return chNum !== null && chNum > 6;
-    });
-  
-    setGroup1(group1Rooms);
-    setGroup2(group2Rooms);
-  }, [rooms]);
+    const assigned = assignRoomsToFacilityGroups(rooms, tenant?.facilityGroups);
+    setGroupedRooms(assigned);
+  }, [rooms, tenant?.facilityGroups]);
+
+  useEffect(() => {
+    if (facilityGroups.length && !facilityGroups.find((g) => g.id === activeTab)) {
+      setActiveTab(facilityGroups[0].id);
+    }
+  }, [facilityGroups, activeTab]);
+
+  const activeGroup = facilityGroups.find((g) => g.id === activeTab) ?? facilityGroups[0];
+  const activeRooms = groupedRooms[activeTab] ?? [];
+  const totalAssigned = facilityGroups.reduce(
+    (sum, g) => sum + (groupedRooms[g.id]?.length ?? 0),
+    0
+  );
   
   // Swipe gesture handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -469,11 +436,13 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
     const isLeftSwipe = distance > 50;
     const isRightSwipe = distance < -50;
 
-    if (isLeftSwipe && activeTab === "group1" && group2.length > 0) {
-      setActiveTab("group2");
+    const activeIndex = facilityGroups.findIndex((g) => g.id === activeTab);
+
+    if (isLeftSwipe && activeIndex < facilityGroups.length - 1) {
+      setActiveTab(facilityGroups[activeIndex + 1].id);
     }
-    if (isRightSwipe && activeTab === "group2" && group1.length > 0) {
-      setActiveTab("group1");
+    if (isRightSwipe && activeIndex > 0) {
+      setActiveTab(facilityGroups[activeIndex - 1].id);
     }
   };
 
@@ -508,30 +477,26 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                  {activeTab === "group1" ? "LYAZAMI 1-6" : "LYAZAMI 7-12"}
+                  {activeGroup?.label ?? activeTab}
                 </h1>
                 <p className="text-sm text-gray-500 font-medium">
-                  {activeTab === "group1"
-                    ? `${group1.length} ${t(
-                        "dashboard.facilityMap.roomsMain"
-                      )} principales`
-                    : `${group2.length} ${t(
-                        "dashboard.facilityMap.roomsMain"
-                      )} principales`}
+                  {activeRooms.length}{" "}
+                  {t("dashboard.facilityMap.roomsMain", "chambres")}
+                  {activeGroup?.subtitle ? ` · ${activeGroup.subtitle}` : ""}
                 </p>
               </div>
+              {facilityGroups.length > 1 && (
               <div className="flex space-x-1">
+                {facilityGroups.map((g) => (
                 <div
+                  key={g.id}
                   className={`w-2 h-2 rounded-full ${
-                    activeTab === "group1" ? "bg-blue-500" : "bg-gray-300"
+                    activeTab === g.id ? GROUP_STYLES[facilityGroups.indexOf(g) % 3].dot : "bg-gray-300"
                   }`}
                 ></div>
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    activeTab === "group2" ? "bg-green-500" : "bg-gray-300"
-                  }`}
-                ></div>
+                ))}
               </div>
+              )}
             </div>
           </div>
 
@@ -575,124 +540,60 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Group 1 - LYAZAMI 1-6 */}
-        {group1.length > 0 && (activeTab === "group1" || !isMobile) && (
-          <div
-            className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 ${
-              isMobile
-                ? activeTab === "group1"
-                  ? "opacity-100 translate-x-0"
-                  : "opacity-0 translate-x-full absolute"
-                : ""
-            }`}
-          >
-            {/* Desktop header - hidden on mobile */}
-            <div className="hidden sm:block px-6 py-6 bg-gradient-to-r from-blue-50 via-blue-50 to-indigo-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
-                    LYAZAMI 1-6
-                  </h2>
-                  <p className="text-gray-600 text-sm font-medium">
-                    {t(
-                      "dashboard.facilityMap.roomsMain",
-                      "chambres principales"
-                    )}{" "}
-                    (1-6)
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {group1.length}
+        {facilityGroups.map((group, groupIndex) => {
+          const groupRooms = groupedRooms[group.id] ?? [];
+          if (groupRooms.length === 0) return null;
+          const style = GROUP_STYLES[groupIndex % GROUP_STYLES.length];
+          if (isMobile && activeTab !== group.id) return null;
+
+          return (
+            <div
+              key={group.id}
+              className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 ${
+                isMobile
+                  ? activeTab === group.id
+                    ? "opacity-100 translate-x-0"
+                    : "opacity-0 translate-x-full absolute"
+                  : ""
+              }`}
+            >
+              <div className={`hidden sm:block px-6 py-6 bg-gradient-to-r ${style.gradient}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{group.label}</h2>
+                    <p className="text-gray-600 text-sm font-medium">
+                      {group.subtitle ||
+                        t("dashboard.facilityMap.roomsMain", "chambres principales")}
+                    </p>
                   </div>
-                  <div className="text-sm text-gray-500 font-medium">
-                    {t(
-                      "dashboard.facilityMap.roomsMain",
-                      "chambres principales"
-                    )}
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${style.accent}`}>{groupRooms.length}</div>
+                    <div className="text-sm text-gray-500 font-medium">
+                      {t("dashboard.facilityMap.roomsMain", "chambres")}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Content */}
-            <div className="px-2 py-3 sm:px-4 sm:py-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {group1.map((room) => (
-                  <RoomCard
-                    key={room.id}
-                    room={room}
-                    clients={getClientsForRoom()}
-                    reservations={reservations}
-                    viewMode={viewMode}
-                    receptions={receptions}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Group 2 - LYAZAMI 7-12 */}
-        {group2.length > 0 && (activeTab === "group2" || !isMobile) && (
-          <div
-            className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 ${
-              isMobile
-                ? activeTab === "group2"
-                  ? "opacity-100 translate-x-0"
-                  : "opacity-0 -translate-x-full absolute"
-                : ""
-            }`}
-          >
-            {/* Desktop header - hidden on mobile */}
-            <div className="hidden sm:block px-6 py-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">
-                    LYAZAMI 7-12
-                  </h2>
-                  <p className="text-gray-600 text-sm font-medium">
-                    {t(
-                      "dashboard.facilityMap.roomsMain",
-                      "chambres principales"
-                    )}{" "}
-                    (7-12)
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-green-600">
-                    {group2.length}
-                  </div>
-                  <div className="text-sm text-gray-500 font-medium">
-                    {t(
-                      "dashboard.facilityMap.roomsMain",
-                      "chambres principales"
-                    )}
-                  </div>
+              <div className="px-2 py-3 sm:px-4 sm:py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                  {groupRooms.map((room) => (
+                    <RoomCard
+                      key={room.id}
+                      room={room}
+                      clients={getClientsForRoom()}
+                      reservations={reservations}
+                      viewMode={viewMode}
+                      receptions={receptions}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
+          );
+        })}
 
-            {/* Content */}
-            <div className="px-2 py-3 sm:px-4 sm:py-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {group2.map((room) => (
-                  <RoomCard
-                    key={room.id}
-                    room={room}
-                    clients={getClientsForRoom()}
-                    reservations={reservations}
-                    viewMode={viewMode}
-                    receptions={receptions}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {group1.length === 0 && group2.length === 0 && (
+        {totalAssigned === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg
@@ -723,82 +624,43 @@ const FacilityMap: React.FC<FacilityMapProps> = ({
         )}
       </div>
 
-      {/* Mobile Tab Navigation */}
+      {facilityGroups.length > 1 && (
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg">
         <div className="flex">
+          {facilityGroups.map((group, groupIndex) => {
+            const style = GROUP_STYLES[groupIndex % GROUP_STYLES.length];
+            const count = groupedRooms[group.id]?.length ?? 0;
+            return (
           <button
-            onClick={() => setActiveTab("group1")}
+            key={group.id}
+            onClick={() => setActiveTab(group.id)}
             className={`flex-1 flex flex-col items-center justify-center py-3 px-4 transition-all duration-200 ${
-              activeTab === "group1"
-                ? "text-blue-600 bg-blue-50"
+              activeTab === group.id
+                ? `${style.activeText} ${style.activeBg}`
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
-                activeTab === "group1"
-                  ? "bg-blue-600 text-white"
+                activeTab === group.id
+                  ? `${style.btn} text-white`
                   : "bg-gray-100 text-gray-500"
               }`}
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-            <span className="text-xs font-medium">LYAZAMI 1-6</span>
+            <span className="text-xs font-medium truncate max-w-full px-1">{group.label}</span>
             <span className="text-xs text-gray-400">
-              {group1.length}{" "}
-              {t("dashboard.facilityMap.roomsMain", "chambres principales")}
+              {count} {t("dashboard.facilityMap.roomsMain", "chambres")}
             </span>
           </button>
-
-          <button
-            onClick={() => setActiveTab("group2")}
-            className={`flex-1 flex flex-col items-center justify-center py-3 px-4 transition-all duration-200 ${
-              activeTab === "group2"
-                ? "text-green-600 bg-green-50"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${
-                activeTab === "group2"
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
-            </div>
-            <span className="text-xs font-medium">LYAZAMI 7-12</span>
-            <span className="text-xs text-gray-400">
-              {group2.length}{" "}
-              {t("dashboard.facilityMap.roomsMain", "chambres principales")}
-            </span>
-          </button>
+            );
+          })}
         </div>
       </div>
+      )}
     </div>
   );
 };

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="FrigoSmart">
+  <defs>
+    <linearGradient id="fs-icon-grad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#fs-icon-grad)"/>
+  <path d="M24 10v28M10 24h28M14.5 14.5l19 19M33.5 14.5l-19 19" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="24" cy="24" r="5" fill="#fff" fill-opacity="0.95"/>
+</svg>

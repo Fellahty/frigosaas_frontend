@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';
@@ -196,7 +196,7 @@ export const OperationsOverviewPage: React.FC = () => {
     queryFn: async () => {
       if (!tenantId) return 50;
       try {
-        const pricingRef = doc(db, `tenants/${tenantId}/settings/pricing`);
+        const pricingRef = doc(db, 'tenants', tenantId, 'settings', 'pricing');
         const pricingDoc = await getDoc(pricingRef);
         if (pricingDoc.exists()) {
           const data = pricingDoc.data();

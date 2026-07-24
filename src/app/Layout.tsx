@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../lib/hooks/useAuth';
+import { useTenantDisplayName } from '../lib/hooks/useTenantDisplayName';
 import { LangSwitcher } from '../components/LangSwitcher';
 import { SyncStatusIndicator } from '../components/SyncStatusIndicator';
 
@@ -79,6 +80,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const { logout, user } = useAuth();
+  const tenantDisplayName = useTenantDisplayName();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
@@ -133,7 +135,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex-1 text-center">
             <div className="flex flex-col items-center justify-center">
               <h1 className="text-xs font-light tracking-wide text-slate-500">{t('common.domain')}</h1>
-              <h2 className="text-base font-semibold text-slate-900">{t('common.companyName')}</h2>
+              <h2 className="text-base font-semibold text-slate-900">{tenantDisplayName}</h2>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -168,7 +170,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="hidden md:flex items-center justify-between px-6 pb-6 pt-8">
             <div className="space-y-1">
               <p className="text-sm font-light tracking-wide text-slate-500">{t('common.domain')}</p>
-              <p className="text-2xl font-semibold text-slate-900">{t('common.companyName')}</p>
+              <p className="text-2xl font-semibold text-slate-900">{tenantDisplayName}</p>
             </div>
             <div className="rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 shadow-sm">
               <LangSwitcher />

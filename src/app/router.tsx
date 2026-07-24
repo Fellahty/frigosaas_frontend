@@ -2,7 +2,7 @@ import React from 'react';
 import { createBrowserRouter, Navigate, useRouteError } from 'react-router-dom';
 import { Layout } from './Layout';
 import { ClientLayout } from './ClientLayout';
-import { LoginPage } from '../features/auth/LoginPage';
+import { LoginRoute } from '../app/LoginRoute';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { ClientDashboardPage } from '../features/dashboard/ClientDashboardPage';
 import { ClientsPage } from '../features/clients/ClientsPage';
@@ -27,6 +27,16 @@ import ClientSensorsPage from '../features/sensors/ClientSensorsPage';
 import { HygienePage } from '../features/hygiene/HygienePage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '../lib/hooks/useAuth';
+import { AdminLoginPage } from '../features/admin/AdminLoginPage';
+import { AdminLayout } from '../features/admin/AdminLayout';
+import { AdminProtectedRoute } from '../features/admin/AdminProtectedRoute';
+import { AdminDashboardPage } from '../features/admin/AdminDashboardPage';
+import { OrganizationsPage } from '../features/admin/OrganizationsPage';
+import { OrganizationDetailPage } from '../features/admin/OrganizationDetailPage';
+import { AdminSubscriptionsPage } from '../features/admin/AdminSubscriptionsPage';
+import { AdminSystemPage } from '../features/admin/AdminSystemPage';
+import { AdminAuditLogPage } from '../features/admin/AdminAuditLogPage';
+import { AdminAlertsPage } from '../features/admin/AdminAlertsPage';
 
 // Layout Wrapper Component
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -120,7 +130,32 @@ const ErrorBoundary = () => {
 export const router = createBrowserRouter([
   {
     path: '/login',
-    element: <LoginPage />,
+    element: <LoginRoute />,
+  },
+  {
+    path: '/login/:tenant',
+    element: <LoginRoute />,
+  },
+  {
+    path: '/admin/login',
+    element: <AdminLoginPage />,
+  },
+  {
+    path: '/admin',
+    element: (
+      <AdminProtectedRoute>
+        <AdminLayout />
+      </AdminProtectedRoute>
+    ),
+    children: [
+      { path: '', element: <AdminDashboardPage /> },
+      { path: 'organizations', element: <OrganizationsPage /> },
+      { path: 'organizations/:id', element: <OrganizationDetailPage /> },
+      { path: 'alerts', element: <AdminAlertsPage /> },
+      { path: 'activity', element: <AdminAuditLogPage /> },
+      { path: 'subscriptions', element: <AdminSubscriptionsPage /> },
+      { path: 'system', element: <AdminSystemPage /> },
+    ],
   },
   {
     path: '/',

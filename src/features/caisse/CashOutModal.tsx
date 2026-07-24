@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { collection, addDoc, Timestamp, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, Timestamp, query, orderBy, limit, getDocs } from '@/lib/db';
+import { ref, uploadBytes, getDownloadURL } from '@/lib/storage';
 import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { logCreate } from '../../lib/logging';

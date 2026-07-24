@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../lib/hooks/useAuth';
 import { Card } from '../../components/Card';

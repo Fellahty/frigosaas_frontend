@@ -4,7 +4,7 @@ import { FormCard } from '../../../components/FormCard';
 import { Card } from '../../../components/Card';
 import { roomSchema, type Room } from '../../../types/settings';
 import { useTenantId } from '../../../lib/hooks/useTenantId';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from '@/lib/db';
 import { db } from '../../../lib/firebase';
 import { toast } from 'react-hot-toast';
 import PolygonEditorModal from '../../../components/PolygonEditorModal';

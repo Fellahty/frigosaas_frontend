@@ -8,7 +8,7 @@
  * to manage room settings with sensor installation status.
  */
 
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } from '@/lib/db';
 import { db } from '../firebase';
 
 export interface RoomSettings {

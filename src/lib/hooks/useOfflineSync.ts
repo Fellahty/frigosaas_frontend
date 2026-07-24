@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { onSnapshot, doc, collection, query, where, orderBy, limit, QueryConstraint } from 'firebase/firestore';
-import { Unsubscribe } from 'firebase/firestore';
+import { onSnapshot, doc, collection, query, where, orderBy, limit, QueryConstraint, Unsubscribe } from '@/lib/db';
 import { db } from '../firebase';
 
 export interface SyncStatus {

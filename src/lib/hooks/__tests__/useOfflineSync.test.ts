@@ -1,20 +1,18 @@
 import { renderHook, act } from '@testing-library/react';
 import { useOfflineSync, useOfflineQuery, useOfflineMutation } from '../useOfflineSync';
 
-// Mock Firebase
-jest.mock('../../firebase', () => ({
+// Mock db shim (replaces Firebase)
+jest.mock('@/lib/db', () => ({
   db: {},
-}));
-
-// Mock Firestore functions
-jest.mock('firebase/firestore', () => ({
   collection: jest.fn(),
   query: jest.fn(),
   where: jest.fn(),
   getDocs: jest.fn(),
   onSnapshot: jest.fn(),
-  enableNetwork: jest.fn(),
-  disableNetwork: jest.fn(),
+}));
+
+jest.mock('../../firebase', () => ({
+  db: {},
 }));
 
 describe('useOfflineSync', () => {
