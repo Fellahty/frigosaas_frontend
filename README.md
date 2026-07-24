@@ -104,17 +104,7 @@ After starting the emulators, run the seed script:
 node scripts/seed-data.js
 ```
 
-This will create sample data in the `metrics_today/YAZAMI` document and some sample clients.
-
-## Available Scripts
-
-- `npm run dev` / `npm run dev:web` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-- `npm run test` - Run tests with Vitest
-- `npm run emulators:start` - Start Firebase emulators (Auth + Firestore)
+This will create sample data in the `metrics_today/YAZAMI` document and some sample clients. + Firestore)
 - `npm run emulators:start:all` - Start all Firebase emulators
 
 ## Development Workflow
