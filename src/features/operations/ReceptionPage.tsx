@@ -9,6 +9,7 @@ import { ref, uploadBytes, getDownloadURL } from '@/lib/storage';
 import { db, storage } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { useAppSettings } from '../../lib/hooks/useAppSettings';
+import { useSeasonContext } from '../../lib/seasons/SeasonProvider';
 import { logCreate, logUpdate, logDelete } from '../../lib/logging';
 import { fetchWithCache } from '../../lib/cache';
 import { safeToDate } from '../../lib/dateUtils';
@@ -292,6 +293,7 @@ const printTicketInCurrentWindow = (reception: Reception, ticketNumber: string, 
 
 export const ReceptionPage: React.FC = () => {
   const { t } = useTranslation();
+  const { isReadOnly } = useSeasonContext();
   const tenantId = useTenantId();
   const { settings } = useAppSettings();
   const queryClient = useQueryClient();
@@ -2111,7 +2113,10 @@ export const ReceptionPage: React.FC = () => {
             <p className="text-gray-600">{t('reception.subtitle', 'Gérer les entrées de caisses produits clients')}</p>
         </div>
         <button
+          disabled={isReadOnly}
+          title={isReadOnly ? 'Saison clôturée — modifications désactivées' : undefined}
           onClick={() => {
+            if (isReadOnly) return;
             setEditingReceptionId(null);
             setForm({
               clientId: defaultClientId,
@@ -2127,7 +2132,7 @@ export const ReceptionPage: React.FC = () => {
             });
             setIsAdding(true);
           }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t('reception.addReception', 'Nouvelle réception')}
         </button>

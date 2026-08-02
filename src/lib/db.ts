@@ -176,6 +176,13 @@ export async function getDocs(q: QueryRef): Promise<QuerySnapshot> {
 
   const limitClause = q.constraints.find((c): c is Extract<QueryConstraint, { type: 'limit' }> => c.type === 'limit');
 
+  let seasonId: string | undefined;
+  try {
+    seasonId = sessionStorage.getItem('frigosmart.selectedSeasonId') || undefined;
+  } catch {
+    seasonId = undefined;
+  }
+
   const data = await apiRequest<Record<string, unknown>[]>('/data/query', {
     method: 'POST',
     body: JSON.stringify({
@@ -183,6 +190,7 @@ export async function getDocs(q: QueryRef): Promise<QuerySnapshot> {
       where: whereClauses,
       orderBy: orderClauses,
       limit: limitClause?.count,
+      ...(seasonId ? { seasonId } : {}),
     }),
   });
 

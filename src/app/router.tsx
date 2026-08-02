@@ -37,6 +37,15 @@ import { AdminSubscriptionsPage } from '../features/admin/AdminSubscriptionsPage
 import { AdminSystemPage } from '../features/admin/AdminSystemPage';
 import { AdminAuditLogPage } from '../features/admin/AdminAuditLogPage';
 import { AdminAlertsPage } from '../features/admin/AdminAlertsPage';
+import { OperatorLoginPage } from '../features/operator/OperatorLoginPage';
+import { OperatorProtectedRoute } from '../features/operator/OperatorLayout';
+import { OperatorHomePage } from '../features/operator/OperatorHomePage';
+import { OperatorEntryPage } from '../features/operator/OperatorEntryPage';
+import { OperatorScanPage } from '../features/operator/OperatorScanPage';
+import { OperatorMovePage } from '../features/operator/OperatorMovePage';
+import { OperatorReprintPage } from '../features/operator/OperatorReprintPage';
+import { OperatorStockPage } from '../features/operator/OperatorStockPage';
+import { OperatorRecentPage } from '../features/operator/OperatorRecentPage';
 
 // Layout Wrapper Component
 const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -135,6 +144,24 @@ export const router = createBrowserRouter([
   {
     path: '/login/:tenant',
     element: <LoginRoute />,
+  },
+  {
+    path: '/operator/login',
+    element: <OperatorLoginPage />,
+  },
+  {
+    path: '/operator',
+    element: <OperatorProtectedRoute />,
+    errorElement: <ErrorBoundary />,
+    children: [
+      { path: '', element: <OperatorHomePage /> },
+      { path: 'entry', element: <OperatorEntryPage /> },
+      { path: 'scan', element: <OperatorScanPage /> },
+      { path: 'move', element: <OperatorMovePage /> },
+      { path: 'reprint', element: <OperatorReprintPage /> },
+      { path: 'stock', element: <OperatorStockPage /> },
+      { path: 'recent', element: <OperatorRecentPage /> },
+    ],
   },
   {
     path: '/admin/login',

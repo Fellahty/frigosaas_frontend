@@ -5,6 +5,8 @@ import { useAuth } from '../lib/hooks/useAuth';
 import { useTenantDisplayName } from '../lib/hooks/useTenantDisplayName';
 import { LangSwitcher } from '../components/LangSwitcher';
 import { SyncStatusIndicator } from '../components/SyncStatusIndicator';
+import { SeasonProvider } from '../lib/seasons/SeasonProvider';
+import { SeasonSelector } from '../components/SeasonSelector';
 
 type NavAccent = 'primary' | 'amber' | 'emerald';
 
@@ -119,6 +121,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const financeActive = isSectionActive(financePaths);
 
   return (
+    <SeasonProvider>
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200">
       {/* Mobile Top Bar - Compact */}
       <div className="md:hidden sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur shadow-sm">
@@ -326,6 +329,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         <span className="flex-1 text-left">{t('sidebar.palletScanner', 'Scanner Palette')}</span>
                       </Link>
                     </li>
+                    <li>
+                      <Link
+                        to="/operator"
+                        className={buildNestedNavClass(isActive('/operator'), 'cyan')}
+                      >
+                        <span className={buildNestedIconWrapperClass(isActive('/operator'))}>
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                        </span>
+                        <span className="flex-1 text-left">{t('sidebar.operatorMode', 'Mode opérateur')}</span>
+                      </Link>
+                    </li>
                   </ul>
                 )}
               </li>
@@ -475,9 +491,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main content */}
       <div className={`${isRtl ? 'md:mr-72' : 'md:ml-72'} p-2 md:p-8`}>
         <div className="max-w-7xl mx-auto">
+          <div className="mb-4">
+            <SeasonSelector />
+          </div>
           {children}
         </div>
       </div>
     </div>
+    </SeasonProvider>
   );
 };

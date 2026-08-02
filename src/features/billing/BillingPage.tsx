@@ -4,6 +4,7 @@ import { collection, getDocs, addDoc, Timestamp, query, where, doc, getDoc, setD
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
+import { useSeasonContext } from '../../lib/seasons/SeasonProvider';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
@@ -23,6 +24,7 @@ export const BillingPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const tenantId = useTenantId();
+  const { isReadOnly } = useSeasonContext();
 
   const [isAdding, setIsAdding] = React.useState(false);
   const [form, setForm] = React.useState({
@@ -264,8 +266,13 @@ export const BillingPage: React.FC = () => {
           <p className="text-gray-600">{t('billing.subtitle', 'Gérez vos factures')}</p>
         </div>
         <button
-          onClick={() => setIsAdding((v) => !v)}
-          className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          disabled={isReadOnly}
+          title={isReadOnly ? 'Saison clôturée — modifications désactivées' : undefined}
+          onClick={() => {
+            if (isReadOnly) return;
+            setIsAdding((v) => !v);
+          }}
+          className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75V11h5.75a.75.75 0 010 1.5H12.75v5.75a.75.75 0 01-1.5 0V12.5H5.5a.75.75 0 010-1.5h5.75V5.25A.75.75 0 0112 4.5z" clipRule="evenodd" /></svg>
           {t('billing.addInvoice', 'Ajouter une facture')}

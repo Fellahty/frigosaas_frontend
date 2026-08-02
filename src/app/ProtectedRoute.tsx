@@ -23,5 +23,9 @@ export const ProtectedRoute: React.FC = () => {
     return <Navigate to={slug ? `/login/${slug}` : '/login'} replace />;
   }
 
+  if (user.role === 'operator') {
+    return <Navigate to="/operator" replace />;
+  }
+
   return <Outlet />;
 };

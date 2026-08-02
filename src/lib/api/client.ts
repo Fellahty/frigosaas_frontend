@@ -13,9 +13,22 @@ export function clearToken() {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public details?: unknown
+  ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+function getSelectedSeasonHeader(): string | null {
+  try {
+    return sessionStorage.getItem('frigosmart.selectedSeasonId');
+  } catch {
+    return null;
   }
 }
 
@@ -34,11 +47,16 @@ export async function apiRequest<T>(
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
+  const seasonId = getSelectedSeasonHeader();
+  if (seasonId && !headers['X-Selected-Season-Id']) {
+    headers['X-Selected-Season-Id'] = seasonId;
+  }
+
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
   const body = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new ApiError(body.error || res.statusText, res.status);
+    throw new ApiError(body.error || res.statusText, res.status, body.code, body.details);
   }
 
   return body.data as T;

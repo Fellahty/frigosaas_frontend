@@ -10,7 +10,7 @@ export interface UserCredentials {
   username?: string;
   email?: string;
   password?: string;
-  role: 'admin' | 'manager' | 'viewer' | 'client';
+  role: 'admin' | 'manager' | 'viewer' | 'client' | 'operator';
   isActive: boolean;
   tenantId: string;
 }

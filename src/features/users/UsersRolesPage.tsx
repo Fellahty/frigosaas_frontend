@@ -7,8 +7,9 @@ import { logCreate, logDelete, logUpdate } from '../../lib/logging';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
 import { Spinner } from '../../components/Spinner';
+import { apiRequest } from '@/lib/api/client';
 
-type UserRole = 'admin' | 'manager' | 'viewer';
+type UserRole = 'admin' | 'manager' | 'viewer' | 'operator';
 
 interface TenantUser {
   id: string;
@@ -39,6 +40,7 @@ export const UsersRolesPage: React.FC = () => {
     confirmPassword: string;
     role: UserRole;
     isActive: boolean;
+    pin: string;
   }>({
     name: '',
     phone: '',
@@ -47,6 +49,7 @@ export const UsersRolesPage: React.FC = () => {
     confirmPassword: '',
     role: 'viewer',
     isActive: true,
+    pin: '',
   });
 
   const { data: users, isLoading, error } = useQuery({
@@ -78,19 +81,36 @@ export const UsersRolesPage: React.FC = () => {
       password: string; 
       role: UserRole;
       isActive: boolean;
+      pin?: string;
     }) => {
-      // Basic password validation
       if (payload.password.length < 6) {
         throw new Error('Password must be at least 6 characters long');
       }
-      
-      // Create Firestore user document (without Firebase Auth for now)
+      if (payload.role === 'operator') {
+        if (!payload.pin || !/^\d{4}$/.test(payload.pin)) {
+          throw new Error('Le code PIN opérateur doit contenir 4 chiffres');
+        }
+        await apiRequest(`/tenants/${tenantId}/users`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: payload.name,
+            phone: payload.phone,
+            username: payload.username,
+            password: payload.password,
+            role: 'operator',
+            isActive: payload.isActive,
+            pin: payload.pin,
+          }),
+        });
+        return;
+      }
+
       await addDoc(collection(db, 'users'), {
         tenantId,
         name: payload.name,
         phone: payload.phone,
         username: payload.username,
-        password: payload.password, // In production, this should be hashed
+        password: payload.password,
         role: payload.role,
         isActive: payload.isActive,
         createdAt: Timestamp.fromDate(new Date()),
@@ -106,11 +126,11 @@ export const UsersRolesPage: React.FC = () => {
         password: '', 
         confirmPassword: '', 
         role: 'viewer',
-        isActive: true
+        isActive: true,
+        pin: '',
       });
       setShowPassword(false);
       setShowConfirmPassword(false);
-      // Log the action
       await logCreate('user', undefined, `User created: ${form.name} (${form.username})`, 'admin', 'Administrateur');
     },
   });
@@ -124,8 +144,25 @@ export const UsersRolesPage: React.FC = () => {
       password?: string; 
       role: UserRole;
       isActive: boolean;
+      pin?: string;
     }) => {
-      const updateData: any = {
+      if (payload.role === 'operator' || payload.pin) {
+        await apiRequest(`/tenants/${tenantId}/users/${payload.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: payload.name,
+            phone: payload.phone,
+            username: payload.username,
+            role: payload.role,
+            isActive: payload.isActive,
+            ...(payload.password && payload.password.length >= 6 ? { password: payload.password } : {}),
+            ...(payload.pin && /^\d{4}$/.test(payload.pin) ? { pin: payload.pin } : {}),
+          }),
+        });
+        return;
+      }
+
+      const updateData: Record<string, unknown> = {
         name: payload.name,
         phone: payload.phone,
         username: payload.username,
@@ -133,12 +170,10 @@ export const UsersRolesPage: React.FC = () => {
         isActive: payload.isActive,
       };
 
-      // Only update password if provided
       if (payload.password && payload.password.length >= 6) {
         updateData.password = payload.password;
       }
 
-      // Update Firestore document
       await updateDoc(doc(db, 'users', payload.id), updateData);
     },
     onSuccess: async () => {
@@ -151,11 +186,11 @@ export const UsersRolesPage: React.FC = () => {
         password: '', 
         confirmPassword: '', 
         role: 'viewer',
-        isActive: true
+        isActive: true,
+        pin: '',
       });
       setShowPassword(false);
       setShowConfirmPassword(false);
-      // Log the action
       await logUpdate('user', editingUser?.id, `User updated: ${editingUser?.name} (${editingUser?.username})`, 'admin', 'Administrateur');
     },
   });
@@ -186,6 +221,7 @@ export const UsersRolesPage: React.FC = () => {
       confirmPassword: '',
       role: user.role,
       isActive: user.isActive,
+      pin: '',
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -211,6 +247,7 @@ export const UsersRolesPage: React.FC = () => {
       password: form.password || undefined,
       role: form.role,
       isActive: form.isActive,
+      pin: form.pin || undefined,
     });
   };
 
@@ -227,7 +264,8 @@ export const UsersRolesPage: React.FC = () => {
       password: '', 
       confirmPassword: '', 
       role: 'viewer',
-      isActive: true
+      isActive: true,
+      pin: '',
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -311,8 +349,25 @@ export const UsersRolesPage: React.FC = () => {
                 <option value="admin">{t('usersRoles.roleAdmin', 'Administrateur')}</option>
                 <option value="manager">{t('usersRoles.roleManager', 'Gestionnaire')}</option>
                 <option value="viewer">{t('usersRoles.roleViewer', 'Lecteur')}</option>
+                <option value="operator">{t('usersRoles.roleOperator', 'Opérateur')}</option>
               </select>
             </div>
+            {form.role === 'operator' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('usersRoles.pin', 'Code PIN tablette (4 chiffres)')}
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={form.pin}
+                  onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                  className="w-full border rounded-md px-3 py-2"
+                  placeholder="••••"
+                />
+              </div>
+            ) : null}
             <div className="flex items-center gap-2">
               <input
                 id="isActive"
@@ -398,7 +453,8 @@ export const UsersRolesPage: React.FC = () => {
                   username: form.username,
                   password: form.password,
                   role: form.role,
-                  isActive: form.isActive
+                  isActive: form.isActive,
+                  pin: form.pin || undefined,
                 });
               }}
               disabled={!form.name || !form.phone || !form.username || !form.password || !form.confirmPassword || addUser.isLoading}
@@ -553,8 +609,25 @@ export const UsersRolesPage: React.FC = () => {
                     <option value="admin">{t('usersRoles.roleAdmin', 'Administrateur')}</option>
                     <option value="manager">{t('usersRoles.roleManager', 'Gestionnaire')}</option>
                     <option value="viewer">{t('usersRoles.roleViewer', 'Lecteur')}</option>
+                    <option value="operator">{t('usersRoles.roleOperator', 'Opérateur')}</option>
                   </select>
                 </div>
+                {form.role === 'operator' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('usersRoles.pin', 'Code PIN tablette (4 chiffres)')}
+                    </label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={form.pin}
+                      onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                      className="w-full border rounded-md px-3 py-2"
+                      placeholder="••••"
+                    />
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-2">
                   <input
                     id="editIsActive"

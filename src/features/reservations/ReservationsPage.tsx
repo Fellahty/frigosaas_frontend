@@ -5,6 +5,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, o
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { useAppSettings, usePoolSettings } from '../../lib/hooks/useAppSettings';
+import { useSeasonContext } from '../../lib/seasons/SeasonProvider';
 import { useOfflineQuery, useOfflineMutation } from '../../lib/hooks/useOfflineSync';
 import { Card } from '../../components/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/Table';
@@ -52,6 +53,7 @@ const STATUS_COLORS = {
 
 export const ReservationsPage: React.FC = () => {
   const { t } = useTranslation();
+  const { isReadOnly } = useSeasonContext();
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   const { settings, isLoading: settingsLoading, error: settingsError } = useAppSettings();
@@ -507,8 +509,13 @@ export const ReservationsPage: React.FC = () => {
             </svg>
           </button>
           <button
-            onClick={() => setIsCreating(true)}
-            className="bg-blue-600 text-white px-3 py-2 sm:px-4 rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm sm:text-base transition-colors"
+            disabled={isReadOnly}
+            title={isReadOnly ? 'Saison clôturée — modifications désactivées' : undefined}
+            onClick={() => {
+              if (isReadOnly) return;
+              setIsCreating(true);
+            }}
+            className="bg-blue-600 text-white px-3 py-2 sm:px-4 rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
