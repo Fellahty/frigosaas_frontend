@@ -348,7 +348,7 @@ export const ReceptionPage: React.FC = () => {
   // Pallet modal states
   const [showPalletModal, setShowPalletModal] = React.useState(false);
   const [selectedReception, setSelectedReception] = React.useState<any>(null);
-  const isAutoSavingRef = React.useRef(false);
+  const palletHydratedForRef = React.useRef<string | null>(null);
   const [cratesPerPallet, setCratesPerPallet] = React.useState(42);
   const [customPalletCrates, setCustomPalletCrates] = React.useState<{[key: number]: number}>({});
   const [palletCollectionId, setPalletCollectionId] = React.useState<string | null>(null);
@@ -431,9 +431,10 @@ export const ReceptionPage: React.FC = () => {
 
   // Pallet calculation logic with custom crate support
   const palletCalculation = React.useMemo(() => {
-    if (!selectedReception?.totalCrates) return { fullPallets: 0, remainingCrates: 0, totalPallets: 0, pallets: [] };
-    
-    const totalCrates = selectedReception.totalCrates;
+    const empty = { fullPallets: 0, remainingCrates: 0, totalPallets: 0, pallets: [] as any[], totalCratesUsed: 0 };
+    const totalCrates = Number(selectedReception?.totalCrates) || 0;
+    if (totalCrates <= 0) return empty;
+
     const fullPallets = Math.floor(totalCrates / cratesPerPallet);
     const remainingCrates = totalCrates % cratesPerPallet;
     const totalPallets = fullPallets + (remainingCrates > 0 ? 1 : 0);
@@ -477,24 +478,35 @@ export const ReceptionPage: React.FC = () => {
     };
   }, [selectedReception?.totalCrates, selectedReception?.id, cratesPerPallet, customPalletCrates]);
 
+  const receptionCrates = Number(selectedReception?.totalCrates) || 0;
+  const usedCrates = palletCalculation.totalCratesUsed || 0;
+  const completionPercent = receptionCrates > 0
+    ? Math.min(100, Math.round((usedCrates / receptionCrates) * 100))
+    : 0;
+  const undistributedCrates = receptionCrates - usedCrates;
+
   // Handle pallet modal
   const handlePalletCollection = (reception: any) => {
+    palletHydratedForRef.current = null;
     setSelectedReception(reception);
-    setCustomPalletCrates({}); // Reset custom crate counts
+    setCustomPalletCrates({});
+    setCratesPerPallet(42);
     setPalletCollectionId(null);
     setIsPalletDataSaved(false);
     setShowPalletModal(true);
   };
 
-  // Load existing pallet data when it's available
+  // Load saved pallet layout once when the modal opens — never while the user is editing
   React.useEffect(() => {
-    if (existingPalletData) {
-      setPalletCollectionId(existingPalletData.id);
-      setCratesPerPallet((existingPalletData as any).cratesPerPallet || 42);
-      setCustomPalletCrates((existingPalletData as any).customPalletCrates || {});
-      setIsPalletDataSaved(true);
-    }
-  }, [existingPalletData]);
+    if (!showPalletModal || !existingPalletData || !selectedReception?.id) return;
+    if (palletHydratedForRef.current === selectedReception.id) return;
+
+    palletHydratedForRef.current = selectedReception.id;
+    setPalletCollectionId(existingPalletData.id);
+    setCratesPerPallet((existingPalletData as any).cratesPerPallet || 42);
+    setCustomPalletCrates((existingPalletData as any).customPalletCrates || {});
+    setIsPalletDataSaved(true);
+  }, [showPalletModal, existingPalletData, selectedReception?.id]);
 
   // Generate QR codes for pallets when modal is shown or pallet data changes
   React.useEffect(() => {
@@ -592,39 +604,12 @@ export const ReceptionPage: React.FC = () => {
       ...prev,
       [palletNumber]: crateCount
     }));
-    // Auto-save will be triggered by useEffect
   };
 
-  // Reset custom crate counts
   const resetCustomCrates = () => {
     setCustomPalletCrates({});
     setCratesPerPallet(42);
-    // Auto-save will be triggered by useEffect
   };
-
-  // Auto-save pallet data when changes are made
-  React.useEffect(() => {
-    if (selectedReception?.id && !isAutoSavingRef.current) {
-      const autoSave = async () => {
-        if (isAutoSavingRef.current) return; // Prevent multiple simultaneous saves
-        
-        try {
-          isAutoSavingRef.current = true;
-          console.log('Auto-saving pallet data...');
-          await savePalletCollection.mutateAsync();
-          console.log('Pallet data auto-saved successfully');
-        } catch (error) {
-          console.error('Error auto-saving pallet data:', error);
-        } finally {
-          isAutoSavingRef.current = false;
-        }
-      };
-
-      // Debounce auto-save to avoid too many saves
-      const timeoutId = setTimeout(autoSave, 2000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [customPalletCrates, cratesPerPallet, selectedReception?.id]);
 
   // Save pallet collection data
   const savePalletCollection = useMutation({
@@ -661,7 +646,6 @@ export const ReceptionPage: React.FC = () => {
     },
     onSuccess: () => {
       setIsPalletDataSaved(true);
-      queryClient.invalidateQueries({ queryKey: ['pallet-collection', selectedReception?.id] });
     },
   });
 
@@ -1369,7 +1353,7 @@ export const ReceptionPage: React.FC = () => {
             productVariety: data.productVariety || '',
             roomId: data.roomId || '',
             roomName: data.roomName || '',
-            totalCrates: data.totalCrates || 0,
+            totalCrates: Number(data.totalCrates) || 0,
             arrivalTime: data.arrivalTime?.toDate?.() || new Date(),
             status: data.status || 'pending',
             notes: data.notes || '',
@@ -3258,20 +3242,19 @@ export const ReceptionPage: React.FC = () => {
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               {/* Header */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="flex items-center space-x-3">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {t('reception.palletCollection', 'Collecte palette')}
-                    </h2>
-                    {isPalletDataSaved && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        ✓ {t('reception.saved', 'Sauvegardé')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-gray-600 mt-1">
-                    {selectedReception.clientName} - {selectedReception.totalCrates} caisses
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {t('reception.palletCollection', 'Collecte palette')}
+                  </h2>
+                  <p className="text-gray-600 mt-1 text-sm">
+                    {t('reception.palletHelp', 'Répartissez les caisses reçues en palettes, puis imprimez un ticket pour chaque palette.')}
+                  </p>
+                  <p className="text-gray-900 mt-2 font-medium">
+                    {selectedReception.clientName}
+                    <span className="ml-2 text-sm font-normal text-gray-500">
+                      {receptionCrates} {t('reception.crates', 'caisses')}
+                    </span>
                   </p>
                 </div>
                 <button
@@ -3284,137 +3267,68 @@ export const ReceptionPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Configuration */}
-              <div className="mb-6 p-6 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl border border-orange-200">
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    {t('reception.customizePalletSize', 'Personnaliser la taille des palettes')}
+              {receptionCrates <= 0 ? (
+                <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                  <div className="text-3xl mb-2">📦</div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {t('reception.noCratesTitle', 'Aucune caisse à répartir')}
                   </h3>
-                  <div className="flex items-center justify-center gap-6">
-                    <div className="text-center">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {t('reception.cratesPerPallet', 'Caisses par palette')}
-                      </label>
-                      <input
-                        type="number"
-                        value={cratesPerPallet}
-                        onChange={(e) => setCratesPerPallet(parseInt(e.target.value) || 42)}
-                        min="1"
-                        max="42"
-                        className="w-24 px-4 py-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-center font-bold text-xl text-orange-700 bg-white shadow-md"
-                      />
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600 mb-1">
-                        {palletCalculation.totalPallets}
-                      </div>
-                      <div className="text-sm text-orange-700 font-medium">
-                        {t('reception.totalPallets', 'Palettes')}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    {/* Quick preset buttons */}
-                    <div className="flex justify-center gap-2">
+                  <p className="mt-2 text-sm text-gray-600">
+                    {t('reception.noCratesHelp', "Cette réception n'a pas de caisses. Modifiez d'abord la réception et indiquez le nombre de caisses.")}
+                  </p>
+                </div>
+              ) : (
+                <>
+              {/* Configuration */}
+              <div className="mb-6 p-5 bg-orange-50 rounded-xl border border-orange-200">
+                <h3 className="text-base font-semibold text-gray-900 mb-1">
+                  {t('reception.howManyPerPallet', 'Combien de caisses par palette ?')}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  {t('reception.cratesPerPalletHint', 'Exemple : 2000 caisses avec 42 par palette = 48 palettes.')}
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="number"
+                    value={cratesPerPallet}
+                    onChange={(e) => setCratesPerPallet(Math.max(1, parseInt(e.target.value) || 1))}
+                    min="1"
+                    max="42"
+                    className="w-20 px-3 py-2 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-center font-bold text-lg text-orange-700 bg-white"
+                  />
+                  <span className="text-sm text-gray-600">{t('reception.crates', 'caisses')} / palette</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[42, 36, 30, 24].map((size) => (
                       <button
-                        onClick={() => setCratesPerPallet(42)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                          cratesPerPallet === 42
+                        key={size}
+                        type="button"
+                        onClick={() => setCratesPerPallet(size)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-full transition-colors ${
+                          cratesPerPallet === size
                             ? 'bg-orange-600 text-white'
-                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
+                            : 'bg-white text-orange-700 border border-orange-300 hover:bg-orange-50'
                         }`}
                       >
-                        42
+                        {size} {t('reception.crates', 'caisses')}
                       </button>
-                      <button
-                        onClick={() => setCratesPerPallet(36)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                          cratesPerPallet === 36
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
-                        }`}
-                      >
-                        36
-                      </button>
-                      <button
-                        onClick={() => setCratesPerPallet(30)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                          cratesPerPallet === 30
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
-                        }`}
-                      >
-                        30
-                      </button>
-                      <button
-                        onClick={() => setCratesPerPallet(24)}
-                        className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                          cratesPerPallet === 24
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-white text-orange-600 border border-orange-300 hover:bg-orange-50'
-                        }`}
-                      >
-                        24
-                      </button>
-                    </div>
-                    
-                    {/* Slider for fine-tuning */}
-                    <div className="px-4">
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
-                        <span>1</span>
-                        <span className="font-medium">{t('reception.cratesPerPallet', 'Caisses par palette')}</span>
-                        <span>42</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="42"
-                        value={cratesPerPallet}
-                        onChange={(e) => setCratesPerPallet(parseInt(e.target.value))}
-                        className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer slider"
-                        style={{
-                          background: `linear-gradient(to right, #fb923c 0%, #fb923c ${((cratesPerPallet - 1) / 41) * 100}%, #fed7aa ${((cratesPerPallet - 1) / 41) * 100}%, #fed7aa 100%)`
-                        }}
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
+                <p className="mt-4 text-sm font-medium text-orange-800">
+                  {t('reception.palletsToPrepare', '{{count}} palette(s) à préparer', { count: palletCalculation.totalPallets })}
+                  {palletCalculation.fullPallets > 0 && (
+                    <span className="font-normal text-orange-700">
+                      {' '}— {palletCalculation.fullPallets} × {cratesPerPallet}
+                      {palletCalculation.remainingCrates > 0 ? ` + 1 × ${palletCalculation.remainingCrates}` : ''}
+                    </span>
+                  )}
+                </p>
               </div>
 
               {/* Pallet Visualization */}
-              <div className="space-y-6">
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg text-center">
-                    <div className="text-3xl font-bold text-blue-600 mb-1">
-                      {palletCalculation.totalPallets}
-                    </div>
-                    <div className="text-sm text-blue-700">
-                      {t('reception.totalPallets', 'Palettes totales')}
-                    </div>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg text-center">
-                    <div className="text-3xl font-bold text-green-600 mb-1">
-                      {palletCalculation.fullPallets}
-                    </div>
-                    <div className="text-sm text-green-700">
-                      {t('reception.fullPallets', 'Palettes complètes')}
-                    </div>
-                  </div>
-                  <div className="bg-orange-50 p-4 rounded-lg text-center">
-                    <div className="text-3xl font-bold text-orange-600 mb-1">
-                      {palletCalculation.remainingCrates}
-                    </div>
-                    <div className="text-sm text-orange-700">
-                      {t('reception.remainingCrates', 'Caisses restantes')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Visual Pallet Representation */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {t('reception.palletVisualization', 'Visualisation des palettes')}
+                    {t('reception.palletVisualization', 'Palettes à imprimer')}
                   </h3>
                   
                   {/* All Pallets with Custom Editing */}
@@ -3529,53 +3443,35 @@ export const ReceptionPage: React.FC = () => {
                 </div>
 
                 {/* Progress Bar */}
-                <div className="space-y-3">
+                <div className="space-y-3 mt-6">
                   <div className="flex justify-between text-sm text-gray-600 mb-2">
-                    <span className="font-medium">{t('reception.totalCrates', 'Total caisses')}</span>
+                    <span className="font-medium">{t('reception.totalCrates', 'Caisses réparties')}</span>
                     <span className="font-bold text-orange-600">
-                      {palletCalculation.totalCratesUsed || selectedReception.totalCrates} / {selectedReception.totalCrates}
+                      {usedCrates} / {receptionCrates}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-blue-500 via-green-500 to-orange-500 h-4 rounded-full transition-all duration-1000 ease-out relative"
-                      style={{
-                        width: `${Math.min(100, ((palletCalculation.totalCratesUsed || selectedReception.totalCrates) / selectedReception.totalCrates) * 100)}%`
-                      }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
-                    </div>
+                      className="bg-orange-500 h-3 rounded-full transition-all duration-300"
+                      style={{ width: `${completionPercent}%` }}
+                    />
                   </div>
                   <div className="text-xs text-gray-500 text-center">
-                    {Math.round(((palletCalculation.totalCratesUsed || selectedReception.totalCrates) / selectedReception.totalCrates) * 100)}% {t('reception.complete', 'complété')}
+                    {completionPercent}% {t('reception.complete', 'complété')}
                   </div>
-                  {palletCalculation.totalCratesUsed !== selectedReception.totalCrates && (
+                  {undistributedCrates !== 0 && (
                     <div className="text-xs text-amber-600 text-center">
-                      ⚠️ {selectedReception.totalCrates - (palletCalculation.totalCratesUsed || 0)} caisses non distribuées
+                      {undistributedCrates > 0
+                        ? `⚠️ ${undistributedCrates} caisses non distribuées`
+                        : `⚠️ ${Math.abs(undistributedCrates)} caisses en trop`}
                     </div>
                   )}
                 </div>
-              </div>
+                </>
+              )}
 
               {/* Actions */}
               <div className="mt-8 pt-6 border-t border-gray-200">
-                {/* Auto-save indicator - Full width on mobile */}
-                <div className="mb-4 sm:mb-0">
-                  <div className={`inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                    savePalletCollection.isLoading 
-                      ? 'text-blue-700 bg-blue-100 border border-blue-200' 
-                      : 'text-green-700 bg-green-100 border border-green-200'
-                  }`}>
-                    <div className={`w-2 h-2 rounded-full mr-2 ${
-                      savePalletCollection.isLoading ? 'bg-blue-500 animate-pulse' : 'bg-green-500'
-                    }`}></div>
-                    {savePalletCollection.isLoading 
-                      ? 'Sauvegarde en cours...' 
-                      : 'Sauvegarde automatique ✓'
-                    }
-                  </div>
-                </div>
-                
                 {/* Action buttons - Responsive layout */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
@@ -3590,6 +3486,7 @@ export const ReceptionPage: React.FC = () => {
                     </div>
                   </button>
                   
+                  {receptionCrates > 0 && (
                   <button
                     onClick={async () => {
                       await generatePalletTickets();
@@ -3601,9 +3498,10 @@ export const ReceptionPage: React.FC = () => {
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                       </svg>
-                      {t('reception.generatePalletTicket', 'Générer ticket palette')}
+                      {t('reception.generatePalletTicket', 'Imprimer les tickets')}
                     </div>
                   </button>
+                  )}
                 </div>
               </div>
             </div>
