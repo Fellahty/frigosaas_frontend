@@ -46,8 +46,30 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     boitieSensorId: '',
   });
   const [sensorIdError, setSensorIdError] = useState<string>('');
+  const [attemptedSave, setAttemptedSave] = useState(false);
   const [sortField, setSortField] = useState<keyof RoomDoc | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  type RoomFormData = Room & { capacityCrates: number; capacityPallets: number; athGroupNumber: number; boitieSensorId: string };
+
+  const getFormErrors = () => {
+    const errors: Partial<Record<keyof RoomFormData | 'capacity', string>> = {};
+    if (!formData.room.trim()) {
+      errors.room = t('settings.rooms.roomRequired', 'Le nom de la chambre est requis') as string;
+    }
+    if (formData.capacityCrates <= 0 && formData.capacityPallets <= 0) {
+      errors.capacity = t('settings.rooms.capacityRequired', 'Indiquez au moins une capacité (caisses ou palettes)') as string;
+    }
+    if (formData.capteurInstalled && !formData.sensorId.trim()) {
+      errors.sensorId = t('settings.rooms.sensorIdRequiredWhenInstalled', "L'ID du capteur est requis lorsque le capteur est installé") as string;
+    } else if (formData.sensorId.trim() && sensorIdError) {
+      errors.sensorId = sensorIdError;
+    }
+    return errors;
+  };
+
+  const formErrors = getFormErrors();
+  const isFormValid = Object.keys(formErrors).length === 0;
 
   // Calculate total room capacity for crates
   const totalRoomCrateCapacity = rooms.reduce((total, room) => {
@@ -104,6 +126,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       boitieSensorId: '',
     });
     setSensorIdError('');
+    setAttemptedSave(false);
     setShowModal(true);
   };
 
@@ -114,21 +137,25 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
       capacity: room.capacity,
       capacityCrates: room.capacityCrates || 0,
       capacityPallets: room.capacityPallets || 0,
-      sensorId: room.sensorId,
+      sensorId: room.sensorId || '',
       active: room.active,
       capteurInstalled: room.capteurInstalled || false,
       athGroupNumber: room.athGroupNumber || 1,
       boitieSensorId: room.boitieSensorId || '',
     });
     setSensorIdError('');
+    setAttemptedSave(false);
     setShowModal(true);
   };
 
   const handleSaveRoom = async () => {
     if (!tenantId) return;
+
+    setAttemptedSave(true);
+    if (!isFormValid) return;
     
-    // Check if sensor ID already exists (only for new rooms or when sensor ID changed)
-    if (!editingRoom || editingRoom.sensorId !== formData.sensorId) {
+    // Check if sensor ID already exists (only when an ID is provided)
+    if (formData.sensorId.trim() && (!editingRoom || editingRoom.sensorId !== formData.sensorId)) {
       const existingRoom = rooms.find(room => 
         room.sensorId === formData.sensorId && room.id !== editingRoom?.id
       );
@@ -195,7 +222,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
     setRoomToDelete(null);
   };
 
-  const handleInputChange = (field: keyof (Room & { capacityCrates: number; capacityPallets: number }), value: any) => {
+  const handleInputChange = (field: keyof RoomFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -227,6 +254,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
   const handleCloseModal = () => {
     setShowModal(false);
     setSensorIdError('');
+    setAttemptedSave(false);
   };
 
   const handleEditPolygon = (room: RoomDoc) => {
@@ -493,7 +521,7 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                       {(room.capacityPallets || 0).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {room.sensorId}
+                      {room.sensorId ? room.sensorId : <span className="text-gray-400 text-xs">-</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -574,73 +602,105 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={handleCloseModal}>
             <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-1">
                 {editingRoom ? t('settings.rooms.editRoom', 'Modifier la chambre') : t('settings.rooms.addRoom', 'Ajouter une chambre')}
               </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                {t('settings.rooms.requiredHint', 'Les champs marqués * sont obligatoires')}
+              </p>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('settings.rooms.room', 'Chambre')}
+                  <label htmlFor="room-name" className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('settings.rooms.room', 'Chambre')} <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="room-name"
                     type="text"
                     value={formData.room}
                     onChange={(e) => handleInputChange('room', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      attemptedSave && formErrors.room
+                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="CH1"
+                    required
                   />
+                  {attemptedSave && formErrors.room && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.room}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('settings.rooms.capacityCrates', 'Capacité (Caisses)')}
+                  <label htmlFor="capacity-crates" className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('settings.rooms.capacityCrates', 'Capacité (Caisses)')} <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="capacity-crates"
                     type="number"
                     min="0"
                     value={formData.capacityCrates}
                     onChange={(e) => handleInputChange('capacityCrates', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      attemptedSave && formErrors.capacity
+                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="6000"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('settings.rooms.capacityPallets', 'Capacité (Palettes)')}
+                  <label htmlFor="capacity-pallets" className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('settings.rooms.capacityPallets', 'Capacité (Palettes)')} <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id="capacity-pallets"
                     type="number"
                     min="0"
                     value={formData.capacityPallets}
                     onChange={(e) => handleInputChange('capacityPallets', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      attemptedSave && formErrors.capacity
+                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     placeholder="300"
+                    required
                   />
+                  {attemptedSave && formErrors.capacity && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.capacity}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="sensor-id" className="block text-sm font-medium text-gray-700 mb-2">
                     {t('settings.rooms.sensorId', 'ID Capteur')}
+                    {formData.capteurInstalled && <span className="text-red-500"> *</span>}
                   </label>
                   <input
+                    id="sensor-id"
                     type="text"
                     value={formData.sensorId}
                     onChange={(e) => handleInputChange('sensorId', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      sensorIdError 
+                      (attemptedSave && formErrors.sensorId) || sensorIdError
                         ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
                         : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                     }`}
                     placeholder="S-CH1"
                   />
-                  {sensorIdError && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('settings.rooms.sensorIdHelp', "Peut rester vide si le capteur n'est pas encore installé")}
+                  </p>
+                  {((attemptedSave && formErrors.sensorId) || sensorIdError) && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      {sensorIdError}
+                      {formErrors.sensorId || sensorIdError}
                     </p>
                   )}
                 </div>
@@ -714,12 +774,16 @@ export const RoomsTab: React.FC<RoomsTabProps> = ({ onDirtyChange, onValidChange
                   </button>
                   <button
                     onClick={handleSaveRoom}
-                    disabled={!formData.room || !formData.sensorId || (formData.capacityCrates === 0 && formData.capacityPallets === 0) || !!sensorIdError}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                   >
                     {t('common.save')}
                   </button>
                 </div>
+                {attemptedSave && !isFormValid && (
+                  <p className="mt-2 text-sm text-red-600 text-right">
+                    {t('settings.rooms.requiredHint', 'Les champs marqués * sont obligatoires')}
+                  </p>
+                )}
             </div>
           </div>
         </div>

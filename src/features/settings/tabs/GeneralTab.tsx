@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { FormCard } from '../../../components/FormCard';
 import { generalSettingsSchema, type GeneralSettings } from '../../../types/settings';
 import { useTenantId } from '../../../lib/hooks/useTenantId';
+import { useTenantOptional } from '../../../app/TenantProvider';
+import { getStoredTenantName } from '../../../lib/tenantBranding';
 import { doc, getDoc, setDoc } from '@/lib/db';
 import { db } from '../../../lib/firebase';
 import { toast } from 'react-hot-toast';
@@ -15,8 +17,10 @@ interface GeneralTabProps {
 export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabProps>(({ onDirtyChange, onValidChange }, ref) => {
   const { t } = useTranslation();
   const tenantId = useTenantId();
+  const tenant = useTenantOptional();
+  const fridgeName = tenant?.name || getStoredTenantName() || '';
   const [formData, setFormData] = useState<GeneralSettings>({
-    name: '',
+    name: fridgeName,
     currency: 'MAD',
     locale: 'fr',
     capacity_unit: 'caisses',
@@ -26,28 +30,31 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
       to: '',
     },
   });
-  const [originalData, setOriginalData] = useState<GeneralSettings | null>(null);
+  const [originalData, setOriginalData] = useState<GeneralSettings | null>(() => ({
+    name: fridgeName,
+    currency: 'MAD',
+    locale: 'fr',
+    capacity_unit: 'caisses',
+    initial_cash_balance: 0,
+    season: {
+      from: '',
+      to: '',
+    },
+  }));
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Initialize with default values immediately
-    const defaultData: GeneralSettings = {
-      name: '',
-      currency: 'MAD',
-      locale: 'fr',
-      capacity_unit: 'caisses',
-      initial_cash_balance: 0,
-      season: {
-        from: '',
-        to: '',
-      },
-    };
-    setFormData(defaultData);
-    setOriginalData(defaultData);
-    
-    // Then try to load from Firestore
     loadSettings();
   }, [tenantId]);
+
+  useEffect(() => {
+    if (!fridgeName) return;
+    setFormData((prev) => (prev.name?.trim() ? prev : { ...prev, name: fridgeName }));
+    setOriginalData((prev) => {
+      if (!prev || prev.name?.trim()) return prev;
+      return { ...prev, name: fridgeName };
+    });
+  }, [fridgeName]);
 
   useEffect(() => {
     const validation = generalSettingsSchema.safeParse(formData);
@@ -66,8 +73,18 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
       
       if (docSnap.exists()) {
         const data = docSnap.data() as GeneralSettings;
-        setFormData(data);
-        setOriginalData(data);
+        const resolved: GeneralSettings = {
+          ...data,
+          name: data.name?.trim() || fridgeName,
+        };
+        setFormData(resolved);
+        setOriginalData(resolved);
+      } else {
+        setFormData((prev) => {
+          const next = { ...prev, name: prev.name?.trim() || fridgeName };
+          setOriginalData(next);
+          return next;
+        });
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -102,16 +119,6 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
     save: handleSave
   }), [formData, tenantId]);
 
-  const handleSeasonChange = (field: 'from' | 'to', value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      season: {
-        ...prev.season,
-        [field]: value
-      }
-    }));
-  };
-
   if (isLoading) {
     return <div className="text-center py-8">{t('common.loading')}</div>;
   }
@@ -138,7 +145,7 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder={t('settings.general.fridgeNamePlaceholder', 'Ex: Frigo Yazami') as string}
+              placeholder={t('settings.general.fridgeNamePlaceholder', "Nom de votre installation") as string}
             />
           </div>
 
@@ -191,36 +198,6 @@ export const GeneralTab = forwardRef<{ save: () => Promise<void> }, GeneralTabPr
             </p>
           </div>
 
-        </div>
-
-        <div className="mt-6">
-          <h4 className="text-lg font-medium text-gray-900 mb-4">
-            {t('settings.general.season', 'Saison')}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('settings.general.seasonFrom', 'Début de saison')}
-              </label>
-              <input
-                type="date"
-                value={formData.season.from}
-                onChange={(e) => handleSeasonChange('from', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('settings.general.seasonTo', 'Fin de saison')}
-              </label>
-              <input
-                type="date"
-                value={formData.season.to}
-                onChange={(e) => handleSeasonChange('to', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              />
-            </div>
-          </div>
         </div>
       </FormCard>
     </div>

@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchTenantPublicInfo } from '../lib/tenantBranding';
 import {
-  getStoredLegacyTenantId,
   getStoredTenantSlug,
   persistTenantSession,
-  resolveLoginSlug,
   resolveSlugFromHostname,
 } from '../lib/tenantResolver';
 import type { FacilityGroupConfig } from '../lib/facilityGroups';
@@ -64,11 +62,9 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children, pathSl
 
   useEffect(() => {
     const hostSlug = resolveSlugFromHostname();
-    const sessionSlug = getStoredTenantSlug();
-    const sessionLegacy = getStoredLegacyTenantId();
 
     if (pathSlug) {
-      loadBranding(resolveLoginSlug(pathSlug));
+      loadBranding(pathSlug.toLowerCase());
       return;
     }
 
@@ -77,16 +73,14 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children, pathSl
       return;
     }
 
-    if (sessionSlug && sessionLegacy) {
-      setSlug(sessionSlug);
-      setLegacyId(sessionLegacy);
-      setName(localStorage.getItem('tenantName'));
-      setLoading(false);
-      return;
-    }
-
-    // Slug en session sans legacy (ex. après déconnexion) ou première visite /login
-    loadBranding(sessionSlug || resolveLoginSlug());
+    // /login sans slug ni sous-domaine : plateforme FrigoSmart, pas un client
+    setSlug(null);
+    setLegacyId(null);
+    setName(null);
+    setStatus(null);
+    setFacilityGroups(null);
+    setError(null);
+    setLoading(false);
   }, [pathSlug]);
 
   const value = useMemo<TenantContextValue>(

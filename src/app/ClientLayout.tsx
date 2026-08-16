@@ -45,9 +45,10 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
   const isRtl = typeof document !== 'undefined' && document.documentElement.getAttribute('dir') === 'rtl';
 
   const handleLogout = async () => {
+    const slug = localStorage.getItem('tenantSlug');
     const result = await logout();
     if (result.success) {
-      navigate('/login');
+      navigate(slug ? `/login/${slug}` : '/login');
     }
   };
 

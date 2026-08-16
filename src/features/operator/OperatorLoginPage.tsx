@@ -31,10 +31,12 @@ export function OperatorLoginPage() {
         let resolved = getStoredLegacyTenantId() || tenantId;
         if (!resolved) {
           const slug = resolveLoginSlug();
-          const info = await fetchTenantPublicInfo(slug);
-          if (info?.legacyId) {
-            resolved = info.legacyId;
-            persistTenantSession(info.slug || slug, info.legacyId, info.name);
+          if (slug) {
+            const info = await fetchTenantPublicInfo(slug);
+            if (info?.legacyId) {
+              resolved = info.legacyId;
+              persistTenantSession(info.slug || slug, info.legacyId, info.name);
+            }
           }
         }
         if (!resolved || cancelled) return;

@@ -1,6 +1,7 @@
 /**
  * Résolution du tenant — source unique côté frontend.
- * Ordre : sous-domaine → chemin /login/:slug → session → défaut dev (env).
+ * Ordre : sous-domaine → chemin /login/:slug → session.
+ * Pas de tenant par défaut : /login est la plateforme FrigoSmart, pas un client.
  */
 
 const SLUG_KEY = 'tenantSlug';
@@ -43,12 +44,14 @@ export function clearTenantSession() {
   localStorage.removeItem('tenantName');
 }
 
-export function getDevDefaultSlug(): string {
-  return import.meta.env.VITE_DEFAULT_TENANT_SLUG || 'yazami';
+/** Slug de démo local uniquement si VITE_DEFAULT_TENANT_SLUG est défini. */
+export function getDevDefaultSlug(): string | null {
+  const fromEnv = import.meta.env.VITE_DEFAULT_TENANT_SLUG;
+  return typeof fromEnv === 'string' && fromEnv.trim() ? fromEnv.trim().toLowerCase() : null;
 }
 
-/** Slug pour la page login (avant auth). */
-export function resolveLoginSlug(pathSlug?: string): string {
+/** Slug pour la page login (avant auth). Null = login plateforme FrigoSmart. */
+export function resolveLoginSlug(pathSlug?: string): string | null {
   return (
     pathSlug?.toLowerCase() ||
     resolveSlugFromHostname() ||

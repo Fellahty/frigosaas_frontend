@@ -1,18 +1,21 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo, Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs, query, where } from '@/lib/db';
 import { db } from '../../lib/firebase';
 import { useTenantId } from '../../lib/hooks/useTenantId';
 import { Spinner } from '../../components/Spinner';
 import { useTranslation } from 'react-i18next';
-import { SensorHistoryModal } from './SensorHistoryModal';
-import SensorChart from '../../components/SensorChart';
-import Warehouse3DView from '../../components/Warehouse3DView';
 import { RoomDoc } from '../../types/settings';
 import {
   getDemoColdStorageReading,
   isDemoTenant,
 } from '../../lib/demoColdStorageSensors';
+
+const Warehouse3DView = lazy(() => import('../../components/Warehouse3DView'));
+const SensorChart = lazy(() => import('../../components/SensorChart'));
+const SensorHistoryModal = lazy(() =>
+  import('./SensorHistoryModal').then((mod) => ({ default: mod.SensorHistoryModal }))
+);
 
 // Utility function to calculate time ago
 const getTimeAgo = (timestamp: Date): string => {
@@ -66,6 +69,7 @@ interface Room {
   capacity: number;
   sensorId: string;
   active: boolean;
+  capteurInstalled?: boolean;
   athGroupNumber?: number;
   boitieSensorId?: string;
   sensors: Sensor[];
@@ -94,6 +98,130 @@ interface Sensor {
   };
 }
 
+type TelemetryReading = {
+  temperature: number;
+  humidity: number;
+  battery: number;
+  magnet: number;
+  beacons: null;
+  timestamp: Date;
+  localTime?: string;
+};
+
+const TELEMETRY_URL = 'https://api.frigosmart.com/rooms/latest';
+const TELEMETRY_TIMEOUT_MS = 5000;
+
+async function fetchAllTelemetryData() {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), TELEMETRY_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(TELEMETRY_URL, {
+      signal: controller.signal,
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function extractSensorDataFromBulk(roomName: string, bulkData: any): TelemetryReading | null {
+  if (!bulkData?.data || !Array.isArray(bulkData.data) || bulkData.data.length === 0) {
+    return null;
+  }
+
+  const roomData = bulkData.data.find((item: any) => item.room === roomName);
+  if (!roomData) return null;
+
+  let timestamp = new Date();
+  if (typeof roomData.epoch === 'number' && !isNaN(roomData.epoch)) {
+    const fromEpoch = new Date(roomData.epoch * 1000);
+    if (!isNaN(fromEpoch.getTime())) {
+      timestamp = fromEpoch;
+    }
+  }
+
+  return {
+    temperature: parseFloat(roomData.temperature),
+    humidity: parseFloat(roomData.humidity),
+    battery: 0,
+    magnet: roomData.magnet === true ? 1 : 0,
+    beacons: null,
+    timestamp,
+    localTime: roomData.local_time,
+  };
+}
+
+function buildSensors(room: Room, reading: TelemetryReading | null): Sensor[] {
+  if (!room.capteurInstalled) return [];
+
+  const hasValidData = !!(reading && (
+    (reading.temperature !== undefined && !isNaN(reading.temperature)) ||
+    (reading.humidity !== undefined && !isNaN(reading.humidity))
+  ));
+
+  const sensors: Sensor[] = [
+    {
+      id: `${room.id}-unified`,
+      name: `Capteur ${room.name}`,
+      type: 'temperature',
+      status: hasValidData ? 'online' : 'offline',
+      lastReading: hasValidData && reading ? {
+        value: Math.round(reading.temperature * 10) / 10,
+        unit: '°C',
+        timestamp: reading.timestamp,
+      } : undefined,
+      roomId: room.id,
+      additionalData: reading ? {
+        temperature: reading.temperature,
+        humidity: reading.humidity,
+        battery: reading.battery,
+        magnet: reading.magnet,
+        beacons: reading.beacons,
+        timestamp: reading.timestamp,
+        localTime: reading.localTime,
+      } : undefined,
+    },
+  ];
+
+  if (room.capacity > 100) {
+    sensors.push({
+      id: `${room.id}-motion`,
+      name: `Capteur Mouvement ${room.name}`,
+      type: 'motion',
+      status: 'online',
+      lastReading: {
+        value: Math.random() > 0.8 ? 1 : 0,
+        unit: 'motion',
+        timestamp: new Date(),
+      },
+      roomId: room.id,
+    });
+  }
+
+  return sensors;
+}
+
+const Sensors3DFallback: React.FC = () => (
+  <div
+    className="bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 rounded-2xl border border-slate-300 shadow-2xl overflow-hidden relative flex items-center justify-center"
+    style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}
+  >
+    <div className="text-center">
+      <div className="w-10 h-10 border-4 border-cyan-200 border-t-cyan-600 rounded-full animate-spin mx-auto mb-3" />
+      <p className="text-sm text-slate-600 font-medium">Chargement de la vue 3D...</p>
+    </div>
+  </div>
+);
 
 const SensorsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -102,7 +230,11 @@ const SensorsPage: React.FC = () => {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('map');
+
+  React.useEffect(() => {
+    void import('../../components/Warehouse3DView');
+  }, []);
   
   // Track last valid (non-zero) values for each sensor
   const [lastValidValues, setLastValidValues] = useState<Record<string, { temp: number | null; hum: number | null }>>({});
@@ -113,210 +245,66 @@ const SensorsPage: React.FC = () => {
     return match ? parseInt(match[1]) : null;
   };
 
+  const useDemoSensors = isDemoTenant(tenantId);
 
-  // Function to fetch all telemetry data from the new API (NO CACHE)
-  const fetchAllTelemetryData = useCallback(async () => {
-    console.log(`🔍 [SensorsPage] fetchAllTelemetryData called - NO CACHE`);
-
-    try {
-      const apiUrl = 'https://api.frigosmart.com/rooms/latest';
-      
-      console.log(`🌐 [SensorsPage] Fetching fresh data from API:`, apiUrl);
-      const response = await fetch(apiUrl, {
-        cache: 'no-store', // Disable browser cache
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const rawData = await response.json();
-      
-      console.log(`📊 [SensorsPage] Fresh API response from rooms/latest:`, rawData);
-
-      return rawData;
-
-    } catch (error) {
-      console.error(`❌ [SensorsPage] Error fetching data from rooms/latest:`, error);
-      return null;
-    }
-  }, []);
-
-  // Function to extract sensor data from the new API response
-  const extractSensorDataFromBulk = useCallback((roomName: string, bulkData: any) => {
-    console.log(`🔍 [SensorsPage] extractSensorDataFromBulk called for room: ${roomName}`);
-
-    if (!bulkData || !bulkData.data || !Array.isArray(bulkData.data) || bulkData.data.length === 0) {
-      console.log(`❌ [SensorsPage] No data available in API response`);
-      return null;
-    }
-
-    // Find the room data by exact room name match
-    const roomData = bulkData.data.find((item: any) => item.room === roomName);
-
-    if (!roomData) {
-      console.log(`❌ [SensorsPage] No data found for "${roomName}" in API response`);
-      console.log(`📊 [SensorsPage] Available rooms:`, bulkData.data.map((item: any) => item.room));
-      return null;
-    }
-
-    console.log(`✅ [SensorsPage] Found data for "${roomName}":`, roomData);
-
-    // Create a valid timestamp from epoch, or use current time as fallback
-    let timestamp: Date;
-    if (roomData.epoch && typeof roomData.epoch === 'number' && !isNaN(roomData.epoch)) {
-      timestamp = new Date(roomData.epoch * 1000);
-      // Validate the Date object
-      if (isNaN(timestamp.getTime())) {
-        timestamp = new Date(); // Fallback to current time if invalid
-      }
-    } else {
-      timestamp = new Date(); // Fallback to current time if epoch is missing/invalid
-    }
-
-    // Convert the API response to the expected format
-    const sensorData = {
-      temperature: parseFloat(roomData.temperature),
-      humidity: parseFloat(roomData.humidity),
-      battery: 0, // Not provided by the new API
-      magnet: roomData.magnet === true ? 1 : 0,
-      beacons: null,
-      timestamp: timestamp,
-      localTime: roomData.local_time // Keep the formatted time from API
-    };
-
-    console.log(`✅ [SensorsPage] Processed sensor data for "${roomName}":`, sensorData);
-    console.log(`📊 [SensorsPage] Data validation for "${roomName}":`, {
-      temperatureValid: !isNaN(sensorData.temperature),
-      humidityValid: !isNaN(sensorData.humidity),
-      magnetValid: sensorData.magnet !== undefined,
-      timestampValid: sensorData.timestamp instanceof Date,
-      localTime: sensorData.localTime
-    });
-
-    return sensorData;
-
-  }, []);
-
-  // State to force refresh of sensor data
-  const [forceRefresh, setForceRefresh] = useState(false);
-
-  // Fetch rooms from Firebase
-  const { data: rooms, isLoading: roomsLoading } = useQuery({
-    queryKey: ['rooms', tenantId, 'sensor-data', forceRefresh],
-    refetchInterval: 60000, // Refetch every 60 seconds
-    staleTime: 0, // Consider data stale immediately
-    cacheTime: 30000, // Keep in cache for 30 seconds
+  // Fast path: chambres from Firebase only — do not wait for live telemetry
+  const { data: roomsBase, isLoading: roomsLoading, isFetching: roomsFetching, refetch: refetchRooms } = useQuery({
+    queryKey: ['rooms', tenantId, 'sensors-layout'],
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 30 * 60 * 1000,
+    keepPreviousData: true,
     queryFn: async (): Promise<Room[]> => {
       if (!tenantId) return [];
-      
-      const roomsQuery = query(
-        collection(db, 'rooms'),
-        where('tenantId', '==', tenantId)
-      );
-      
-      const roomsSnapshot = await getDocs(roomsQuery);
-      const roomsData: Room[] = [];
-      
-      // Filter and sort on client side to avoid Firebase index issues
-      // Only show rooms that have sensors installed (capteurInstalled: true)
-      const filteredRooms = roomsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() as RoomDoc }))
-        .filter(room => room.active === true && room.capteurInstalled === true)
-        .sort((a, b) => a.room.localeCompare(b.room, 'fr', { numeric: true }));
-      
-      // DEMO: realistic apple cold-storage norms (not ambient ~21°C from shared API)
-      const useDemoSensors = isDemoTenant(tenantId);
-      const bulkData = useDemoSensors ? null : await fetchAllTelemetryData();
-      
-      for (const roomDoc of filteredRooms) {
-        const sensorData = useDemoSensors
-          ? getDemoColdStorageReading(roomDoc.room)
-          : bulkData
-            ? extractSensorDataFromBulk(roomDoc.room, bulkData)
-            : null;
-        
-        const rawSensorData = sensorData || {
-          temperature: 0,
-          humidity: 0,
-          battery: 0,
-          magnet: 0,
-          beacons: null,
-          timestamp: new Date(),
-          localTime: new Date().toLocaleString('fr-FR')
-        };
 
-        const finalSensorData = rawSensorData;
-        
-        console.log('Final sensor data for room:', roomDoc.room, finalSensorData);
-        
-        // Create one unified sensor that shows all readings from the same device
-        const hasValidData = finalSensorData && (
-          (finalSensorData.temperature !== undefined && !isNaN(finalSensorData.temperature)) ||
-          (finalSensorData.humidity !== undefined && !isNaN(finalSensorData.humidity))
-        );
-        
-        const sensors: Sensor[] = [
-          {
-            id: `${roomDoc.id}-unified`,
-            name: `Capteur ${roomDoc.room}`,
-            type: 'temperature', // Use as primary type
-            status: hasValidData ? 'online' : 'offline',
-            lastReading: hasValidData ? {
-              value: Math.round(finalSensorData.temperature * 10) / 10,
-              unit: '°C',
-              timestamp: finalSensorData.timestamp
-            } : undefined,
-            roomId: roomDoc.id,
-            // Add additional data for display
-            additionalData: {
-              temperature: finalSensorData.temperature,
-              humidity: finalSensorData.humidity,
-              battery: finalSensorData.battery,
-              magnet: finalSensorData.magnet,
-              beacons: finalSensorData.beacons, // Include beacon data if available
-              timestamp: finalSensorData.timestamp,
-              localTime: finalSensorData.localTime
-            }
-          }
-        ];
-        
-        // Add motion sensor for larger rooms
-        if (roomDoc.capacity > 100) {
-          sensors.push({
-            id: `${roomDoc.id}-motion`,
-            name: `Capteur Mouvement ${roomDoc.room}`,
-            type: 'motion',
-            status: 'online',
-            lastReading: {
-              value: Math.random() > 0.8 ? 1 : 0,
-              unit: 'motion',
-              timestamp: new Date()
-            },
-            roomId: roomDoc.id
-          });
-        }
-        
-        roomsData.push({
+      const roomsSnapshot = await getDocs(
+        query(collection(db, 'rooms'), where('tenantId', '==', tenantId))
+      );
+
+      return roomsSnapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() as RoomDoc }))
+        .filter((room) => room.active === true)
+        .sort((a, b) => a.room.localeCompare(b.room, 'fr', { numeric: true }))
+        .map((roomDoc) => ({
           id: roomDoc.id,
           name: roomDoc.room,
           capacity: roomDoc.capacity,
           sensorId: roomDoc.sensorId,
           active: roomDoc.active,
+          capteurInstalled: roomDoc.capteurInstalled === true,
           athGroupNumber: roomDoc.athGroupNumber || 1,
           boitieSensorId: roomDoc.boitieSensorId,
-          sensors: sensors || []
-        });
-      }
-      
-      console.log(`✅ [SensorsPage] Processed ${roomsData.length} rooms with data from new API (1 API call for all rooms)`);
-      return roomsData;
+          sensors: [] as Sensor[],
+        }));
     },
     enabled: !!tenantId,
   });
+
+  // Slow path: live readings load in the background and fill in after the 3D view is shown
+  const { data: telemetry, isFetching: telemetryFetching, refetch: refetchTelemetry } = useQuery({
+    queryKey: ['sensor-telemetry', tenantId],
+    staleTime: 30 * 1000,
+    cacheTime: 5 * 60 * 1000,
+    refetchInterval: 60 * 1000,
+    keepPreviousData: true,
+    queryFn: fetchAllTelemetryData,
+    enabled: !!tenantId && !useDemoSensors,
+  });
+
+  const rooms = useMemo(() => {
+    if (!roomsBase) return [];
+
+    return roomsBase.map((room) => {
+      if (!room.capteurInstalled) {
+        return { ...room, sensors: [] };
+      }
+
+      const reading = useDemoSensors
+        ? getDemoColdStorageReading(room.name)
+        : extractSensorDataFromBulk(room.name, telemetry);
+
+      return { ...room, sensors: buildSensors(room, reading) };
+    });
+  }, [roomsBase, telemetry, useDemoSensors]);
 
   // Update last valid values when rooms data changes
   React.useEffect(() => {
@@ -424,28 +412,19 @@ const SensorsPage: React.FC = () => {
     return { groupedRooms: grouped, tabs };
   }, [processedRooms, t]);
 
-  // Set default tab to first ATH group when rooms are loaded
-  React.useEffect(() => {
-    if (rooms && rooms.length > 0 && !activeTab) {
-      // Find the first ATH group (lowest group number)
-      const athGroups = rooms.map(room => room.athGroupNumber || 1);
-      const minGroup = Math.min(...athGroups);
-      const firstGroupKey = `group-${minGroup}`;
-      setActiveTab(firstGroupKey);
-    }
-  }, [rooms, activeTab]);
+  const resolvedTab = activeTab || tabs.find((tab) => tab.id.startsWith('group-'))?.id || '';
 
   // Get rooms to display based on active tab
   const displayRooms = useMemo(() => {
     let roomsToDisplay: Room[] = [];
     
-    if (!activeTab) {
+    if (!resolvedTab) {
       return [];
     }
-    if (activeTab === 'all') {
+    if (resolvedTab === 'all') {
       roomsToDisplay = processedRooms || [];
     } else {
-      roomsToDisplay = groupedRooms[activeTab] || [];
+      roomsToDisplay = groupedRooms[resolvedTab] || [];
     }
     
     // Sort rooms numerically by name (Chambre 1, Chambre 2, CH1, CH2, etc.) for correct 3D positioning
@@ -464,24 +443,22 @@ const SensorsPage: React.FC = () => {
       
       return aNum - bNum;
     });
-  }, [activeTab, processedRooms, groupedRooms]);
+  }, [resolvedTab, processedRooms, groupedRooms]);
 
   const handleSensorClick = (sensor: Sensor) => {
-    console.log('🔍 [SensorsPage] Sensor clicked:', sensor);
     setSelectedSensor(sensor);
     
     // Show chart for temperature and humidity sensors
     if (sensor.type === 'temperature' || sensor.type === 'humidity') {
-      console.log('📊 [SensorsPage] Opening chart modal for sensor:', sensor.name);
       setIsChartModalOpen(true);
     } else {
-      // Show history modal for other sensor types
-      console.log('📜 [SensorsPage] Opening history modal for sensor:', sensor.name);
       setIsHistoryModalOpen(true);
     }
   };
 
-  if (roomsLoading) {
+  const isRefreshing = roomsFetching || telemetryFetching;
+
+  if (roomsLoading && !roomsBase) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner />
@@ -509,7 +486,7 @@ const SensorsPage: React.FC = () => {
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                   DEMO
                 </span>
-                <span className="text-sm text-gray-500">0 chambres avec capteurs</span>
+                <span className="text-sm text-gray-500">0 {t('sensors.rooms')}</span>
               </div>
             </div>
           </div>
@@ -520,15 +497,10 @@ const SensorsPage: React.FC = () => {
               <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <span className="text-4xl">🏠</span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Aucune chambre avec capteurs installés</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">{t('sensors.noRoomsTitle')}</h3>
               <p className="text-gray-600 text-lg max-w-md mx-auto">
-                Aucune chambre n'a de capteurs installés. Configurez des capteurs dans les paramètres des chambres pour les voir ici.
+                {t('sensors.noRoomsDescription')}
               </p>
-              <div className="mt-6">
-                <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-600 border border-yellow-200">
-                  Capteurs non installés
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -555,9 +527,9 @@ const SensorsPage: React.FC = () => {
                   <div className="hidden lg:flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
                     <span className="text-xs font-medium text-gray-600">
-                      {!activeTab 
+                      {!resolvedTab 
                         ? t('common.loading')
-                        : activeTab === 'all' 
+                        : resolvedTab === 'all' 
                           ? `${rooms.length} ${t('sensors.activeRooms')}`
                           : `${displayRooms.length} ${t('sensors.rooms')}`
                       }
@@ -611,18 +583,18 @@ const SensorsPage: React.FC = () => {
               {/* Refresh Button - Compact */}
               <button
                 onClick={() => {
-                  console.log('🔄 [SensorsPage] Refresh button clicked - forcing fresh data fetch');
-                  setForceRefresh(prev => !prev);
+                  refetchRooms();
+                  if (!useDemoSensors) refetchTelemetry();
                 }}
-                disabled={roomsLoading}
+                disabled={isRefreshing}
                 className={`flex flex-col items-center justify-center px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl transition-all duration-200 ${
-                  roomsLoading
+                  isRefreshing
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 shadow-md hover:shadow-lg border border-blue-200 active:scale-95'
                 }`}
                 title={t('common.refresh') as string}
               >
-                {roomsLoading ? (
+                {isRefreshing ? (
                   <svg className="w-5 h-5 sm:w-4 sm:h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
@@ -641,7 +613,7 @@ const SensorsPage: React.FC = () => {
 
 
         {/* Mobile-Optimized Tabs Navigation */}
-        {activeTab && tabs.length > 1 && (
+        {resolvedTab && tabs.length > 1 && (
           <div className="mb-4 sm:mb-6">
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto pb-px">
@@ -650,7 +622,7 @@ const SensorsPage: React.FC = () => {
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 ${
-                      activeTab === tab.id
+                      resolvedTab === tab.id
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
@@ -658,7 +630,7 @@ const SensorsPage: React.FC = () => {
                     <span className="flex items-center space-x-1 sm:space-x-2">
                       <span className="truncate max-w-[80px] sm:max-w-none">{tab.label}</span>
                       <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                        activeTab === tab.id
+                        resolvedTab === tab.id
                           ? 'bg-blue-100 text-blue-600'
                           : 'bg-gray-100 text-gray-600'
                       }`}>
@@ -673,7 +645,7 @@ const SensorsPage: React.FC = () => {
         )}
 
         {/* View Content */}
-        {!activeTab ? (
+        {!resolvedTab ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
@@ -682,23 +654,26 @@ const SensorsPage: React.FC = () => {
           </div>
         ) : viewMode === 'map' ? (
           /* 3D Warehouse View */
-          <Warehouse3DView 
-            rooms={displayRooms}
-            selectedRoom={null}
-            onRoomClick={(room) => {
-              const sensor = room.sensors[0];
-              if (sensor) {
-                handleSensorClick(sensor);
-              }
-            }}
-          />
+          <Suspense fallback={<Sensors3DFallback />}>
+            <Warehouse3DView 
+              rooms={displayRooms}
+              selectedRoom={null}
+              onRoomClick={(room) => {
+                const sensor = room.sensors[0];
+                if (sensor) {
+                  handleSensorClick(sensor);
+                }
+              }}
+            />
+          </Suspense>
         ) : (
           /* Grid View */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {displayRooms.map((room) => {
               const isSensorBroken = false; // Tous les capteurs fonctionnent maintenant
-              const isDisconnected = room.sensors?.[0]?.additionalData?.timestamp ? 
-                isDataOld(room.sensors[0].additionalData.timestamp) : true;
+              const hasCapteur = room.capteurInstalled === true;
+              const isDisconnected = hasCapteur && !!room.sensors?.[0]?.additionalData?.timestamp &&
+                isDataOld(room.sensors[0].additionalData!.timestamp);
               
               return (
             <div
@@ -733,6 +708,8 @@ const SensorsPage: React.FC = () => {
                         </svg>
                         <span className="text-xs font-medium text-red-600">EN PANNE</span>
                       </div>
+                    ) : !hasCapteur ? (
+                      <span className="text-xs font-medium text-slate-500">{t('sensors.noSensorInstalled')}</span>
                     ) : isDisconnected ? (
                       <div className="flex items-center gap-1">
                         <svg className="w-3 h-3 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
@@ -836,8 +813,22 @@ const SensorsPage: React.FC = () => {
                       )}
                     </div>
                 )) : (
-                  <div className="text-center py-3 text-gray-500 text-sm">
-                    Aucun capteur configuré
+                  <div className="text-center py-4">
+                    <div className="grid grid-cols-2 gap-2 opacity-60">
+                      <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-lg p-2.5 border border-gray-200">
+                        <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.temp')}</div>
+                        <div className="text-base font-bold text-gray-400 text-center">--</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-lg p-2.5 border border-gray-200">
+                        <div className="text-[10px] text-gray-500 font-semibold mb-1 uppercase">{t('sensors.hum')}</div>
+                        <div className="text-base font-bold text-gray-400 text-center">--</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-center">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                        {t('sensors.noSensorInstalled')}
+                      </span>
+                    </div>
                   </div>
                 )}
                 
@@ -861,11 +852,13 @@ const SensorsPage: React.FC = () => {
 
         {/* Sensor History Modal */}
         {selectedSensor && (
-          <SensorHistoryModal
-            isOpen={isHistoryModalOpen}
-            onClose={() => setIsHistoryModalOpen(false)}
-            sensor={selectedSensor}
-          />
+          <Suspense fallback={null}>
+            <SensorHistoryModal
+              isOpen={isHistoryModalOpen}
+              onClose={() => setIsHistoryModalOpen(false)}
+              sensor={selectedSensor}
+            />
+          </Suspense>
         )}
 
         {/* Sensor Chart Modal */}
@@ -874,22 +867,24 @@ const SensorsPage: React.FC = () => {
           const roomName = selectedRoom?.name;
           
           return (
-            <SensorChart
-              sensorId={selectedSensor.id}
-              sensorName={selectedSensor.name}
-              roomName={roomName}
-              displayRoomName={roomName}
-              boitieDeviceId={selectedRoom?.boitieSensorId}
-              isOpen={isChartModalOpen}
-              onClose={() => setIsChartModalOpen(false)}
-              availableChambers={(rooms || []).map(room => ({
-                id: room.sensorId, // Use the actual sensor ID instead of the unified sensor ID
-                name: room.name,
-                channelNumber: extractChannelNumber(room.sensorId) || 1,
-                boitieDeviceId: room.boitieSensorId,
-                athGroupNumber: room.athGroupNumber || 1 // Add FRIGO group number
-              }))}
-            />
+            <Suspense fallback={null}>
+              <SensorChart
+                sensorId={selectedSensor.id}
+                sensorName={selectedSensor.name}
+                roomName={roomName}
+                displayRoomName={roomName}
+                boitieDeviceId={selectedRoom?.boitieSensorId}
+                isOpen={isChartModalOpen}
+                onClose={() => setIsChartModalOpen(false)}
+                availableChambers={(rooms || []).map(room => ({
+                  id: room.sensorId, // Use the actual sensor ID instead of the unified sensor ID
+                  name: room.name,
+                  channelNumber: extractChannelNumber(room.sensorId) || 1,
+                  boitieDeviceId: room.boitieSensorId,
+                  athGroupNumber: room.athGroupNumber || 1 // Add FRIGO group number
+                }))}
+              />
+            </Suspense>
           );
         })()}
       </div>

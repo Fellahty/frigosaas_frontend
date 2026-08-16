@@ -94,9 +94,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const inlineEndClass = isRtl ? 'mr-auto' : 'ml-auto';
 
   const handleLogout = async () => {
+    const slug = localStorage.getItem('tenantSlug');
     const result = await logout();
     if (result.success) {
-      navigate('/login');
+      navigate(slug ? `/login/${slug}` : '/login');
     }
   };
 

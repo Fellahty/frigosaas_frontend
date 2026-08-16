@@ -10,19 +10,16 @@ export const generalSettingsSchema = z.object({
   baseUrl: z.string().url().optional(),
   initial_cash_balance: z.number().min(0, 'Le solde initial doit être positif').default(0),
   season: z.object({
-    from: z.string().min(1, 'Date de début requise'),
-    to: z.string().min(1, 'Date de fin requise'),
-  }).refine(
-    (data) => new Date(data.from) < new Date(data.to),
-    { message: 'La date de début doit être antérieure à la date de fin' }
-  ),
+    from: z.string().optional().default(''),
+    to: z.string().optional().default(''),
+  }).optional(),
 });
 
 // Room Schema
 export const roomSchema = z.object({
   room: z.string().min(1, 'Nom de la chambre requis'),
   capacity: z.number().min(0, 'La capacité doit être positive'),
-  sensorId: z.string().min(1, 'ID du capteur requis'),
+  sensorId: z.string().optional().default(''),
   active: z.boolean().default(true),
   capteurInstalled: z.boolean().default(false), // Whether sensor is installed in the room
   athGroupNumber: z.number().min(1, 'Le numéro de groupe ATH doit être positif').optional(), // ATH group number for the chamber
@@ -31,7 +28,10 @@ export const roomSchema = z.object({
     lat: z.number(),
     lng: z.number()
   })).optional(), // GeoJSON polygon coordinates for map display
-});
+}).refine(
+  (data) => !data.capteurInstalled || Boolean(data.sensorId?.trim()),
+  { message: 'ID du capteur requis si le capteur est installé', path: ['sensorId'] }
+);
 
 // Pool Settings Schema
 export const poolSettingsSchema = z.object({

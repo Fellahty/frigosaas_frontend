@@ -17,7 +17,7 @@
     "retry": "إعادة المحاولة",
     "refresh": "تحديث",
     "domain": "المنطقة",
-    "companyName": "ليزامي",
+    "companyName": "FrigoSmart",
     "saving": "جاري الحفظ...",
     "notAvailable": "غير متوفر"
   },
@@ -331,7 +331,7 @@
       "title": "الإعدادات العامة",
       "description": "إعداد المعلومات الأساسية لمنشأتك",
       "fridgeName": "اسم الثلاجة",
-      "fridgeNamePlaceholder": "مثال: ثلاجة يزمي",
+      "fridgeNamePlaceholder": "اسم منشأتك",
       "currency": "العملة",
       "currencyFixed": "العملة ثابتة بالدرهم المغربي",
       "locale": "اللغة الافتراضية",
@@ -360,6 +360,12 @@
           "confirmDelete": "حذف الغرفة",
           "confirmDeleteMessage": "هل أنت متأكد من حذف الغرفة \"{roomName}\"؟ هذا الإجراء لا يمكن التراجع عنه.",
           "sensorIdExists": "معرف المستشعر موجود بالفعل",
+        "requiredHint": "الحقول المعلّمة بـ * إلزامية",
+        "roomRequired": "اسم الغرفة مطلوب",
+        "capacityRequired": "أدخل سعة واحدة على الأقل (صناديق أو منصات)",
+        "sensorIdRequired": "معرف المستشعر مطلوب",
+        "sensorIdRequiredWhenInstalled": "معرف المستشعر مطلوب عند تركيب المستشعر",
+        "sensorIdHelp": "يمكن تركه فارغًا إذا لم يتم تركيب المستشعر بعد",
         "cratesInCapacity": "صناديق في السعة",
         "totalRoomCapacity": "السعة الإجمالية للغرف",
         "totalRoomCapacityDescription": "العدد الإجمالي للصناديق التي يمكن أن تحتويها جميع الغرف"
@@ -648,7 +654,11 @@
     },
     "tabs": {
       "all": "الكل"
-    }
+    },
+    "noSensorInstalled": "المستشعر غير مثبت",
+    "noSensorInstalledHint": "هذه الغرفة لا تحتوي بعد على مستشعر",
+    "noRoomsTitle": "لا توجد غرف نشطة",
+    "noRoomsDescription": "أضف غرفاً في الإعدادات لعرضها هنا ثلاثي الأبعاد."
   },
   "usersRoles": {
     "title": "المستخدمون والأدوار",
@@ -796,9 +806,13 @@
     "phonePlaceholder": "06 12 34 56 78",
     "passwordPlaceholder": "••••••••",
     "connecting": "جاري الاتصال...",
-    "copyright": "© 2025 Frigo SaaS. جميع الحقوق محفوظة.",
+    "copyright": "© 2025 FrigoSmart. جميع الحقوق محفوظة.",
     "emailOrPhoneRequired": "البريد الإلكتروني أو الهاتف مطلوب",
-    "passwordRequired": "كلمة المرور مطلوبة"
+    "passwordRequired": "كلمة المرور مطلوبة",
+    "platformWelcome": "منصة إدارة المخازن المبردة",
+    "tenantCode": "رمز الفريجو",
+    "tenantCodePlaceholder": "yazami",
+    "continueToTenant": "→"
   },
   "dashboard": {
     "title": "لوحة التحكم",

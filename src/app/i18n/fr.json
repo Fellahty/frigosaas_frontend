@@ -15,7 +15,7 @@
     "back": "Retour",
     "actions": "Actions",
     "domain": "Domaine",
-    "companyName": "LYAZAMI",
+    "companyName": "FrigoSmart",
     "saving": "Sauvegarde...",
     "retry": "Réessayer",
     "refresh": "Actualiser",
@@ -325,7 +325,7 @@
       "title": "Paramètres généraux",
       "description": "Configurez les informations de base de votre installation",
       "fridgeName": "Nom du frigo",
-      "fridgeNamePlaceholder": "Ex: Frigo Yazami",
+      "fridgeNamePlaceholder": "Nom de votre installation",
       "currency": "Devise",
       "currencyFixed": "La devise est fixée en MAD",
       "locale": "Langue par défaut",
@@ -355,6 +355,12 @@
           "confirmDelete": "Supprimer la chambre",
           "confirmDeleteMessage": "Êtes-vous sûr de vouloir supprimer la chambre \"{roomName}\" ? Cette action est irréversible.",
           "sensorIdExists": "Cet ID de capteur existe déjà",
+        "requiredHint": "Les champs marqués * sont obligatoires",
+        "roomRequired": "Le nom de la chambre est requis",
+        "capacityRequired": "Indiquez au moins une capacité (caisses ou palettes)",
+        "sensorIdRequired": "L'ID du capteur est requis",
+        "sensorIdRequiredWhenInstalled": "L'ID du capteur est requis lorsque le capteur est installé",
+        "sensorIdHelp": "Peut rester vide si le capteur n'est pas encore installé",
         "cratesInCapacity": "caisses en capacité",
         "totalRoomCapacity": "Capacité totale des chambres",
         "totalRoomCapacityDescription": "Nombre total de caisses que peuvent contenir toutes les chambres"
@@ -646,7 +652,11 @@
     },
     "tabs": {
       "all": "Toutes"
-    }
+    },
+    "noSensorInstalled": "Capteur non installé",
+    "noSensorInstalledHint": "Cette chambre n'a pas encore de capteur",
+    "noRoomsTitle": "Aucune chambre active",
+    "noRoomsDescription": "Ajoutez des chambres dans les paramètres pour les voir ici en 3D."
   },
   "usersRoles": {
     "title": "Utilisateurs & Rôles",
@@ -830,9 +840,13 @@
     "phonePlaceholder": "06 12 34 56 78",
     "passwordPlaceholder": "••••••••",
     "connecting": "Connexion...",
-    "copyright": "© 2025 Frigo SaaS. Tous droits réservés.",
+    "copyright": "© 2025 FrigoSmart. Tous droits réservés.",
     "emailOrPhoneRequired": "Email ou téléphone requis",
-    "passwordRequired": "Mot de passe requis"
+    "passwordRequired": "Mot de passe requis",
+    "platformWelcome": "Plateforme de gestion frigorifique",
+    "tenantCode": "Code frigo",
+    "tenantCodePlaceholder": "yazami",
+    "continueToTenant": "→"
   },
   "dashboard": {
     "title": "Tableau de bord",

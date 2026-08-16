@@ -32,6 +32,7 @@ interface Room {
   capacity: number;
   sensorId: string;
   active: boolean;
+  capteurInstalled?: boolean;
   athGroupNumber?: number;
   boitieSensorId?: string;
   sensors: Sensor[];
@@ -54,6 +55,7 @@ interface RoomBoxProps {
 }
 
 const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, thermalMode = false }) => {
+  const { t } = useTranslation();
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -99,8 +101,10 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
 
   const color = getColor();
   const sensor = room.sensors?.[0];
+  const capteurInstalled = room.capteurInstalled === true;
   const temp = sensor?.additionalData?.temperature;
   const humidity = sensor?.additionalData?.humidity;
+  const hasReadings = capteurInstalled && temp !== undefined && !isNaN(temp);
 
   // Larger chamber dimensions - fixed size so layout spacing stays consistent
   const width = 5.2;
@@ -223,7 +227,7 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
             </div>
             
             {/* Temperature with trend */}
-            {temp !== undefined && !isNaN(temp) && (
+            {hasReadings && (
               <div className="flex items-center gap-1">
                 <div className="text-base font-bold" style={{
                   color: temp < 5 ? '#0891b2' : temp < 10 ? '#14b8a6' : temp < 15 ? '#ca8a04' : '#ea580c',
@@ -239,7 +243,7 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
             )}
 
             {/* Humidity bar */}
-            {humidity !== undefined && !isNaN(humidity) && (
+            {hasReadings && humidity !== undefined && !isNaN(humidity) && (
               <div className="flex items-center gap-1 mt-1">
                 <div className="w-12 h-1 bg-slate-200 rounded-full overflow-hidden">
                   <div 
@@ -248,6 +252,16 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
                   ></div>
                 </div>
                 <span className="text-[10px] text-slate-600">{humidity.toFixed(0)}%</span>
+              </div>
+            )}
+
+            {capteurInstalled && !hasReadings && (
+              <div className="text-[10px] font-semibold text-slate-400">--</div>
+            )}
+
+            {!capteurInstalled && (
+              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                {t('sensors.noSensorInstalled')}
               </div>
             )}
 
@@ -281,8 +295,31 @@ const RoomBox: React.FC<RoomBoxProps> = ({ room, position, isSelected, onClick, 
         </mesh>
       )}
 
+      {/* Wireframe for chambers without a capteur */}
+      {!capteurInstalled && (
+        <mesh>
+          <boxGeometry args={[width + 0.08, height + 0.08, depth + 0.08]} />
+          <meshBasicMaterial color="#94a3b8" wireframe />
+        </mesh>
+      )}
+
+      {/* Hover: chamber without capteur */}
+      {hovered && !capteurInstalled && (
+        <Html position={[0, height / 2 + 1.5, 0]} center>
+          <div className="bg-white/98 backdrop-blur-md rounded-xl p-3 shadow-2xl border-2 border-slate-300 min-w-[200px]">
+            <div className="font-bold text-slate-700 text-sm mb-2 pb-2 border-b border-slate-200">
+              {room.name}
+            </div>
+            <div className="text-center py-1">
+              <div className="text-xs font-semibold text-slate-500">{t('sensors.noSensorInstalled')}</div>
+              <div className="text-[10px] text-slate-400 mt-1">{t('sensors.noSensorInstalledHint')}</div>
+            </div>
+          </div>
+        </Html>
+      )}
+
       {/* Advanced Info Panel on Hover - Futuristic */}
-      {hovered && sensor?.additionalData && (
+      {hovered && hasReadings && sensor?.additionalData && (
         <Html position={[0, height / 2 + 1.5, 0]} center>
           <div className="bg-white/98 backdrop-blur-md rounded-xl p-3 shadow-2xl border-2 border-cyan-300 min-w-[220px]">
             {/* Header with scanning effect */}
@@ -1016,6 +1053,10 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
             <div className="w-4 h-4 md:w-5 md:h-5 rounded-sm shadow-lg flex-shrink-0" style={{ backgroundColor: '#fda4af', boxShadow: '0 0 15px #fda4af' }}></div>
             <span className="text-[10px] md:text-xs font-bold text-rose-700">🚨 {t('sensors.doorOpen')}</span>
           </div>
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className="w-4 h-4 md:w-5 md:h-5 rounded-sm border border-dashed border-slate-400 flex-shrink-0 bg-slate-200"></div>
+            <span className="text-[10px] md:text-xs text-slate-600 font-medium">{t('sensors.noSensorInstalled')}</span>
+          </div>
         </div>
       </div>
 
@@ -1036,7 +1077,15 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
           <div className="flex-1 bg-blue-50 rounded-lg p-1.5 border border-blue-200/50">
             <div className="text-[8px] text-gray-500 font-medium">T° Moy</div>
             <div className="text-base font-bold text-blue-600">
-              {(rooms.reduce((sum, r) => sum + (r.sensors?.[0]?.additionalData?.temperature || 0), 0) / rooms.length).toFixed(1)}°
+              {(() => {
+                const roomsWithTemp = rooms.filter((r) => {
+                  const temp = r.sensors?.[0]?.additionalData?.temperature;
+                  return temp !== undefined && !isNaN(temp);
+                });
+                if (roomsWithTemp.length === 0) return '--';
+                const avg = roomsWithTemp.reduce((sum, r) => sum + (r.sensors[0].additionalData?.temperature || 0), 0) / roomsWithTemp.length;
+                return `${avg.toFixed(1)}°`;
+              })()}
             </div>
           </div>
         </div>
@@ -1045,7 +1094,10 @@ const Warehouse3DView: React.FC<Warehouse3DViewProps> = ({ rooms, selectedRoom, 
           <div className="flex-1 bg-green-50 rounded-lg p-1.5 border border-green-200/50">
             <div className="text-[8px] text-gray-500 font-medium">OK</div>
             <div className="text-base font-bold text-green-600">
-              {rooms.filter((r) => r.sensors?.[0]?.additionalData?.magnet !== 0 && (r.sensors?.[0]?.additionalData?.temperature || 0) < 10).length}
+              {rooms.filter((r) => {
+                const data = r.sensors?.[0]?.additionalData;
+                return data && data.magnet !== 0 && (data.temperature || 0) < 10;
+              }).length}
             </div>
           </div>
           <div className="flex-1 bg-red-50 rounded-lg p-1.5 border border-red-200/50">

@@ -33,6 +33,7 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loginType, setLoginType] = useState<'email' | 'phone'>('email');
   const [userType, setUserType] = useState<'manager' | 'client'>('manager');
+  const [tenantCode, setTenantCode] = useState('');
 
   const {
     register,
@@ -132,7 +133,7 @@ export const LoginPage: React.FC = () => {
             {brandingLoading ? (
               <span className="inline-block h-10 w-48 bg-gray-200 rounded animate-pulse" />
             ) : (
-              <span className="font-bold">{name || slug?.toUpperCase()}</span>
+              <span className="font-bold">{name || 'FrigoSmart'}</span>
             )}
           </h1>
 
@@ -142,7 +143,7 @@ export const LoginPage: React.FC = () => {
           
           {/* Minimalist welcome message */}
           <p className="text-gray-500 text-base sm:text-lg font-light max-w-md mx-auto leading-relaxed">
-            {t('auth.welcome')}
+            {name ? t('auth.welcome') : t('auth.platformWelcome')}
           </p>
         </div>
 
@@ -164,6 +165,37 @@ export const LoginPage: React.FC = () => {
                     <p className="text-xs sm:text-sm text-red-700">{error}</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {!tenantId && !brandingLoading && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="tenantCode" className="shrink-0 text-[11px] text-gray-400">
+                  {t('auth.tenantCode')}
+                </label>
+                <input
+                  id="tenantCode"
+                  type="text"
+                  value={tenantCode}
+                  onChange={(e) => setTenantCode(e.target.value.toLowerCase().trim())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && tenantCode) {
+                      e.preventDefault();
+                      navigate(`/login/${tenantCode}`);
+                    }
+                  }}
+                  className="min-w-0 flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg bg-gray-50/40 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-1 focus:ring-gray-200 focus:border-gray-300"
+                  placeholder={t('auth.tenantCodePlaceholder') as string}
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => tenantCode && navigate(`/login/${tenantCode}`)}
+                  disabled={!tenantCode}
+                  className="shrink-0 text-[11px] text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                >
+                  {t('auth.continueToTenant')}
+                </button>
               </div>
             )}
 
