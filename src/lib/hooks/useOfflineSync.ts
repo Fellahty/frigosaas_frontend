@@ -136,7 +136,7 @@ export const useOfflineQuery = <T>(
             try {
               const newData = realtimeQuery.transform 
                 ? realtimeQuery.transform(snapshot)
-                : snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as T;
+                : snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T;
               
               setData(newData);
               setLastSync(new Date());

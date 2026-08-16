@@ -114,9 +114,16 @@ function denormalizeValue(value: unknown): unknown {
   return value;
 }
 
+function omitId(data: Record<string, unknown>): Record<string, unknown> {
+  const { id: _id, ...rest } = data;
+  return rest;
+}
+
 function createDocSnapshot(data: Record<string, unknown> | null, path: string[]): DocSnapshot {
-  const id = data?.id ? String(data.id) : path[path.length - 1];
-  const docData = data ? denormalizeValue({ ...data, id: undefined }) as Record<string, unknown> : undefined;
+  const id = data?.id != null && data.id !== '' ? String(data.id) : path[path.length - 1];
+  // Omit id entirely — do not set `id: undefined`, or spreads like
+  // `{ id: doc.id, ...doc.data() }` overwrite every document with the same id.
+  const docData = data ? denormalizeValue(omitId(data)) as Record<string, unknown> : undefined;
 
   return {
     id,

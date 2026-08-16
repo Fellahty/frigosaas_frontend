@@ -51,6 +51,13 @@ const STATUS_COLORS = {
   REFUSED: 'bg-red-100 text-red-800',
 };
 
+function toggleRoomId(selected: string[], roomId: string): string[] {
+  if (!roomId) return selected;
+  return selected.includes(roomId)
+    ? selected.filter(id => id !== roomId)
+    : [...selected, roomId];
+}
+
 export const ReservationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { isReadOnly } = useSeasonContext();
@@ -94,8 +101,8 @@ export const ReservationsPage: React.FC = () => {
       const q = query(collection(db, 'tenants', tenantId, 'clients'));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
         id: doc.id,
-        ...doc.data()
       } as Client));
     },
   });
@@ -107,8 +114,8 @@ export const ReservationsPage: React.FC = () => {
       const q = query(collection(db, 'rooms'), where('tenantId', '==', tenantId));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
         id: doc.id,
-        ...doc.data()
       }));
     },
   });
@@ -120,8 +127,8 @@ export const ReservationsPage: React.FC = () => {
       const q = query(collection(db, 'tenants', tenantId, 'crate-types'), where('isActive', '==', true));
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
         id: doc.id,
-        ...doc.data()
       }));
     },
   });
@@ -144,8 +151,8 @@ export const ReservationsPage: React.FC = () => {
         const totalRoomCapacity = 0;
         
         return {
-          id: doc.id,
           ...data,
+          id: doc.id,
           selectedRooms,
           roomNames,
           totalRoomCapacity,
@@ -169,8 +176,8 @@ export const ReservationsPage: React.FC = () => {
         const totalRoomCapacity = 0;
         
         return {
-          id: doc.id,
           ...data,
+          id: doc.id,
           selectedRooms,
           roomNames,
           totalRoomCapacity,
@@ -1102,9 +1109,9 @@ export const ReservationsPage: React.FC = () => {
                       const nameB = (b.room || b.name || '').toLowerCase();
                       return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
                     })
-                    .map((room: any) => (
+                    .map((room: any, index: number) => (
                     <label 
-                      key={room.id} 
+                      key={room.id || `room-${room.room || room.name || index}`} 
                       className={`flex items-center space-x-2 p-2 rounded-md cursor-pointer transition-all duration-200 ${
                         form.selectedRooms.includes(room.id)
                           ? 'bg-indigo-50 border-indigo-200 border'
@@ -1114,12 +1121,8 @@ export const ReservationsPage: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={form.selectedRooms.includes(room.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setForm(f => ({ ...f, selectedRooms: [...f.selectedRooms, room.id] }));
-                          } else {
-                            setForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== room.id) }));
-                          }
+                        onChange={() => {
+                          setForm(f => ({ ...f, selectedRooms: toggleRoomId(f.selectedRooms, room.id) }));
                         }}
                         className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                       />
@@ -1384,9 +1387,9 @@ export const ReservationsPage: React.FC = () => {
                       const nameB = (b.room || b.name || '').toLowerCase();
                       return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
                     })
-                    .map((room: any) => (
+                    .map((room: any, index: number) => (
                     <label 
-                      key={room.id} 
+                      key={room.id || `edit-room-${room.room || room.name || index}`} 
                       className={`flex items-center space-x-2 p-2 rounded-md cursor-pointer transition-all duration-200 ${
                         editForm.selectedRooms.includes(room.id)
                           ? 'bg-indigo-50 border-indigo-200 border'
@@ -1396,12 +1399,8 @@ export const ReservationsPage: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={editForm.selectedRooms.includes(room.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEditForm(f => ({ ...f, selectedRooms: [...f.selectedRooms, room.id] }));
-                          } else {
-                            setEditForm(f => ({ ...f, selectedRooms: f.selectedRooms.filter(id => id !== room.id) }));
-                          }
+                        onChange={() => {
+                          setEditForm(f => ({ ...f, selectedRooms: toggleRoomId(f.selectedRooms, room.id) }));
                         }}
                         className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                       />
